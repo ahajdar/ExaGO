@@ -1075,6 +1075,8 @@ class SearchJournal:
             data["session_best"] = self.session_best
         if self.load_factor is not None:
             data["load_factor"] = self.load_factor
+        if getattr(self, "rag_enabled", None) is not None:
+            data["rag_enabled"] = self.rag_enabled
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         logger.info("Journal exported to %s (%d entries)", path, len(self._entries))
 

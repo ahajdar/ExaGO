@@ -167,6 +167,8 @@ def start_search(base_case_path, goal, backend, model, temperature,
     st.session_state.steering_history = []
     st.session_state.search_paused = False
     st.session_state.explore_status = None
+    st.session_state.rag_last_refs = None
+    st.session_state.rag_run_enabled = os.environ.get("AGENTIGRID_RAG") == "1"
 
     try:
         manager.start_search(config_overrides=overrides, goal=goal)
@@ -218,6 +220,20 @@ def render_sidebar() -> dict:
             "Temperature", 0.0, 1.0, 0.3, step=0.05,
             disabled=disabled,
         )
+        
+        # ── Advanced ─────────────────────────────────────────────────────
+        with st.expander("🔧 Advanced"):
+            use_reference_knowledge = st.checkbox(
+                "Use curated reference knowledge (RAG)",
+                value=True,
+                disabled=disabled,
+                help=(
+                    "Ground the AI's proposals in a curated knowledge base "
+                    "(tool docs, methodology, example specifications) via retrieval. "
+                    "Improves setup quality; uncheck to compare without it."
+                ),
+            )
+        os.environ["AGENTIGRID_RAG"] = "1" if use_reference_knowledge else "0"
 
         # ── Search Parameters ────────────────────────────────────────────
         st.header("⚙️ Search Parameters")
@@ -750,20 +766,24 @@ def render_live_monitor():
                 st.session_state.iteration_log.append(update)
                 st.session_state.current_iteration = update["iteration"]
             elif update["type"] == "phase":
-                phase_labels = {
-                    "llm_request": "Sending prompt to LLM...",
-                    "applying_commands": "Applying modifications...",
-                    "running_simulation": "Running simulation...",
-                    "parsing_results": "Parsing results...",
-                    "computing_pareto_front": "Computing Pareto front...",
-                }
                 raw_phase = update["phase"]
-                if raw_phase.startswith("running_simulation ("):
-                    st.session_state.current_phase = f"Running {raw_phase.split('(')[1].rstrip(')')}..."
+                if raw_phase.startswith("rag_retrieved:"):
+                    try:
+                        st.session_state.rag_last_refs = int(raw_phase.split(":", 1)[1])
+                    except (ValueError, IndexError):
+                        pass
                 else:
-                    st.session_state.current_phase = phase_labels.get(
-                        raw_phase, raw_phase
-                    )
+                    phase_labels = {
+                        "llm_request": "Sending prompt to LLM...",
+                        "applying_commands": "Applying modifications...",
+                        "running_simulation": "Running simulation...",
+                        "parsing_results": "Parsing results...",
+                        "computing_pareto_front": "Computing Pareto front...",
+                    }
+                    if raw_phase.startswith("running_simulation ("):
+                        st.session_state.current_phase = f"Running {raw_phase.split('(')[1].rstrip(')')}..."
+                    else:
+                        st.session_state.current_phase = phase_labels.get(raw_phase, raw_phase)
             elif update["type"] == "pause_state":
                 st.session_state.search_paused = update["paused"]
             elif update["type"] == "explore_status":
@@ -787,6 +807,14 @@ def render_live_monitor():
 
     # 2. Header
     st.header("🔄 Search in Progress...")
+
+    _rag_on = os.environ.get("AGENTIGRID_RAG") == "1"
+    _refs = st.session_state.get("rag_last_refs")
+    if _rag_on:
+        if _refs and _refs > 0:
+            st.caption(f"🔎 Grounding: {_refs} reference(s) retrieved from the knowledge base")
+        else:
+            st.caption("🔎 Grounding: enabled (curated reference knowledge)")
 
     # 3. Two-column layout
     left_col, right_col = st.columns([2, 1])
@@ -1080,7 +1108,12 @@ def render_results():
         return
 
     st.header("✅ Search Complete")
-
+    _rag_used = getattr(session, "rag_enabled", None)
+    if _rag_used is None:
+        _rag_used = st.session_state.get("rag_run_enabled")
+    if _rag_used:
+        st.caption("🔎 This run used curated reference grounding (RAG).")
+        
     tab1, tab2, tab3 = st.tabs([
         "📊 Overview", "🔍 Detailed Results", "📝 Analysis & Report",
     ])

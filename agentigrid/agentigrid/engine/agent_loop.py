@@ -1332,7 +1332,7 @@ class AgentLoopController:
             )
 
         if self._on_phase:
-            self._on_phase(iteration, "llm_request")
+            self._on_phase(iteration, f"rag_retrieved:{_retrieved.count('[ref ')}")
 
         response = self._backend.complete(system_prompt, user_prompt)
         logger.debug("LLM raw response: %s", response.raw_text[:500])
@@ -4655,6 +4655,10 @@ class AgentLoopController:
 
     def _finalize(self, session: SearchSession, elapsed_seconds: float) -> None:
         """Print summary and save journal."""
+        _rag_enabled = self._retriever.enabled
+        self._journal.rag_enabled = _rag_enabled
+        session.rag_enabled = _rag_enabled
+        
         total_tokens = self._total_prompt_tokens + self._total_completion_tokens
 
         # --- Post-search goal classification via LLM ---
