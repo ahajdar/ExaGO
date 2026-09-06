@@ -96,3 +96,10 @@ desktop.ini
 AGENTS.md
 opencode.md
 /prompts/
+env.sh
+rag/store/
+workdir/
+logs/
+*.bak
+__pycache__/
+.venv/

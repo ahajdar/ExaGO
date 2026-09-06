@@ -1,0 +1,7 @@
+Request: "Assess security of case_ACTIVSg200 under single-element outages."
+Correct specification:
+  application: scopflow
+  base_case: case_ACTIVSg200.m
+  contingencies: case_ACTIVSg200.cont
+  metric: post-contingency feasibility and cost
+  acceptance: feasible under all listed contingencies

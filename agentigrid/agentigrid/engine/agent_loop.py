@@ -11,6 +11,7 @@ import re
 import statistics
 import threading
 import time
+from agentigrid.rag import Retriever
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -766,6 +767,11 @@ class AgentLoopController:
     ) -> None:
         self._config = config
         self._backend: LLMBackend = create_backend(config.llm)
+        self._retriever = Retriever(
+            enabled=os.environ.get("AGENTIGRID_RAG", "0") == "1",
+            # host=getattr(config.llm, "ollama_host", "http://localhost:11434"),
+            host=os.environ.get("OLLAMA_HOST") or getattr(config.llm, "ollama_host", None) or "http://localhost:11434",
+        )
         self._executor = SimulationExecutor(config.exago, config.output)
         self._journal = SearchJournal()
         self._quiet = quiet
@@ -1306,7 +1312,7 @@ class AgentLoopController:
             f"[Iter {iteration}] Sending prompt to "
             f"{self._backend.name()} ({self._config.llm.model})..."
         )
-
+        
         # Assemble and send prompt
         system_prompt, user_prompt = self._assemble_prompt(
             goal,
@@ -1316,6 +1322,14 @@ class AgentLoopController:
             current_iteration=iteration,
         )
         self._error_feedback = None  # consumed
+
+        # RAG: generation-stage grounding only (verifier untouched)
+        _retrieved = self._retriever.retrieve(goal)
+        if _retrieved:
+            user_prompt = (
+                "=== Section B: Reference Material (retrieved) ===\n"
+                f"{_retrieved}\n\n{user_prompt}"
+            )
 
         if self._on_phase:
             self._on_phase(iteration, "llm_request")
