@@ -767,9 +767,12 @@ def render_live_monitor():
                 st.session_state.current_iteration = update["iteration"]
             elif update["type"] == "phase":
                 raw_phase = update["phase"]
+                
                 if raw_phase.startswith("rag_retrieved:"):
+                    _parts = raw_phase.split(":")
                     try:
-                        st.session_state.rag_last_refs = int(raw_phase.split(":", 1)[1])
+                        st.session_state.rag_last_refs = int(_parts[1])
+                        st.session_state.rag_top_score = float(_parts[2]) if len(_parts) > 2 else None
                     except (ValueError, IndexError):
                         pass
                 else:
@@ -810,12 +813,14 @@ def render_live_monitor():
 
     _rag_on = os.environ.get("AGENTIGRID_RAG") == "1"
     _refs = st.session_state.get("rag_last_refs")
+    _top = st.session_state.get("rag_top_score")
     if _rag_on:
         if _refs and _refs > 0:
-            st.caption(f"🔎 Grounding: {_refs} reference(s) retrieved from the knowledge base")
+            _s = f" · top score {_top:.2f}" if _top else ""
+            st.caption(f"🔎 Grounding: {_refs} reference(s) retrieved from the knowledge base{_s}")
         else:
             st.caption("🔎 Grounding: enabled (curated reference knowledge)")
-
+            
     # 3. Two-column layout
     left_col, right_col = st.columns([2, 1])
 

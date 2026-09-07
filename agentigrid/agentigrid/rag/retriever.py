@@ -23,7 +23,7 @@ class Retriever:
         collection: str = "agentigrid_kb",
         host: str = "http://localhost:11434",
         model: str = "nomic-embed-text",
-        k: int = 3,
+        k: int = 6,
         min_score: float = 0.35,
     ):
         self.enabled = enabled

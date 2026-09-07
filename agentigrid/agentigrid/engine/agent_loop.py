@@ -1332,7 +1332,10 @@ class AgentLoopController:
             )
 
         if self._on_phase:
-            self._on_phase(iteration, f"rag_retrieved:{_retrieved.count('[ref ')}")
+            import re as _re
+            _scores = [float(x) for x in _re.findall(r"score (\d+\.\d+)", _retrieved)]
+            _top = max(_scores) if _scores else 0.0
+            self._on_phase(iteration, f"rag_retrieved:{_retrieved.count('[ref ')}:{_top:.2f}")
 
         response = self._backend.complete(system_prompt, user_prompt)
         logger.debug("LLM raw response: %s", response.raw_text[:500])
