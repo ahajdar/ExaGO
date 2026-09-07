@@ -1,0 +1,191 @@
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094811/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094811/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094811/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094811"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094836/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094836/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094836/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094836"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094932/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094932/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094932/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_094932"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095333/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095333/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095333/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095333"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095654/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095654/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095654/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_095654"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Scale all loads by factor=1.4 to narrow feasibility boundary
+Reasoning: Factor=1.0 is feasible and factor=1.8 is marginal/infeasible. With one iteration remaining, I should test factor=1.4 (midpoint) to narrow the boundary. This will either confirm feasibility (giving a better lower bound of 1.4) or show infeasibility (confirming the boundary is below 1.4). The binding constraint at 1.8 was the Bus 29→30 line at 100% loading, so 1.4 may still be feasible.
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_002_20260905_095720/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_002_20260905_095720/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_002_20260905_095720/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_002_20260905_095720"}
+Result: converged & feasible, objective_value=36,670.39, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_193852/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_193852/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_193852/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_193852"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194656/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194656/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194656/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194656"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Enforce 0.95–1.05 pu voltage limits system-wide via set_all_bus_vlimits
+Reasoning: The base case shows bus 10 at 1.060 pu, exceeding the 1.05 pu upper limit. The OPF currently has no enforced voltage bounds, so the solver is free to go above 1.05. By setting system-wide voltage limits of 0.95–1.05 pu via set_all_bus_vlimits, the OPFLOW solver will be constrained to find an optimal dispatch that keeps all bus voltages within the required range. This is the most efficient approach…
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194712/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194712/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194712/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194712"}
+Result: converged & feasible, objective_value=41,875.66, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194811/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194811/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194811/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_194811"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Enforce 0.95–1.05 pu voltage limits on all buses
+Reasoning: The base case shows bus 10 at 1.060 pu, violating the 1.05 pu upper limit. I need to enforce voltage limits of 0.95–1.05 pu across all buses so OPFLOW optimizes within the feasible band. Using set_all_bus_vlimits will constrain the solver to keep all voltages within the required range, which may also reduce cost by allowing a different optimal dispatch.
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194825/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194825/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194825/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_194825"}
+Result: converged & feasible, objective_value=41,875.66, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_195510/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_195510/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_195510/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_195510"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Enforce 0.95–1.05 pu voltage limits system-wide via set_all_bus_vlimits
+Reasoning: The base case has a voltage violation at bus 10 (1.060 pu > 1.05 pu limit). I need to enforce system-wide voltage limits of 0.95–1.05 pu using set_all_bus_vlimits so the OPF solver respects these constraints. This will force the solver to find an optimal dispatch within the voltage band, potentially reducing cost as well by allowing better reactive power optimization.
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_195520/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_195520/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_195520/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_001_20260905_195520"}
+Result: converged & feasible, objective_value=41,875.66, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_202651/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_202651/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_202651/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260905_202651"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_114913/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_114913/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_114913/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_114913"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_115428/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_115428/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_115428/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_115428"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120115/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120115/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120115/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120115"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120955/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120955/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120955/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_120955"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_121231/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_121231/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_121231/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_121231"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122437/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122437/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122437/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122437"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122716/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122716/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122716/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_122716"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_124228/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_124228/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_124228/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_124228"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125120/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125120/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125120/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125120"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125423/case_ACTIVSg200.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125423/case_ACTIVSg200.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125423/case_ACTIVSg200.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_125423"}
+Result: converged & feasible, objective_value=27,557.57, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_131012/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_131012/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_131012/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_131012"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191628/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191628/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191628/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191628"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191659/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191659/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191659/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_191659"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_192007/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_192007/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_192007/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_192007"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_193048/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_193048/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_193048/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_193048"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_195506/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_195506/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_195506/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_195506"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_201215/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_201215/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_201215/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_201215"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
+
+[source: successful AgentiGrid run | app: opflow | status: CONVERGED | harvested: 2026-09-07 | auto-generated exemplar, review before trusting]
+Goal: Base case (no modifications)
+Reasoning: Baseline run
+Proposal (commands actually run): {"mode":"single","application":"opflow","command":"/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_200812/case39.m -print_output","argv":["/home/ahajdar/projects/ExaGO/agentigrid/applications/opflow","-netfile","/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_200812/case39.m","-print_output"],"shell_command":"source /home/ahajdar/projects/ExaGO/agentigrid/configs/env_setup.sh && /home/ahajdar/projects/ExaGO/agentigrid/applications/opflow -netfile /home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_200812/case39.m -print_output","env_overrides":null,"cwd":"/home/ahajdar/projects/ExaGO/agentigrid/workdir/iter_000_20260906_200812"}
+Result: converged & feasible, objective_value=41,864.18, 0 violation(s).
