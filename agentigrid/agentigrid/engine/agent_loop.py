@@ -1228,7 +1228,21 @@ class AgentLoopController:
                 session.termination_reason = "user_stopped"
                 self._print("\nSearch stopped by user.")
                 break
-            action_type, should_continue = self._iteration(iteration, goal)
+            try:
+                action_type, should_continue = self._iteration(iteration, goal)
+            except Exception as e:
+                import traceback
+                self._print(
+                    f"\n[Iter {iteration}] Action failed with an internal error "
+                    f"({type(e).__name__}: {e}); discarding and continuing."
+                )
+                traceback.print_exc()
+                self._error_feedback = (
+                    f"The previous action raised an internal error and was discarded: "
+                    f"{type(e).__name__}: {e}. Respond with a well-formed action that "
+                    f"strictly follows the schema."
+                )
+                action_type, should_continue = "error", True
             # Notify callback after each iteration
             if self._on_iteration:
                 latest_entry = self._journal.latest
@@ -2060,6 +2074,11 @@ class AgentLoopController:
         Returns (candidates, "") on success or (None, error_message) on failure.
         Shared by the feasibility sweep and the boundary sweep.
         """
+        if not isinstance(spec, dict):
+            return None, (
+                f"candidate_set must be an object with a 'type' field, "
+                f"got {type(spec).__name__}: {spec!r}"
+            )
         ctype = spec.get("type", "")
         if ctype == "all_buses":
             candidates = [b.bus_i for b in self._base_network.buses]
@@ -2217,7 +2236,9 @@ class AgentLoopController:
         candidate_set_spec = data.get("candidate_set", {})
         mutation_template = data.get("mutation", {})
         feasibility_spec = data.get("feasibility", {})
-
+        if not isinstance(feasibility_spec, dict):
+            feasibility_spec = {}
+            
         if not mutation_template or "action" not in mutation_template:
             self._error_feedback = "sweep requires a 'mutation' dict with an 'action' key."
             return "error", True
@@ -2641,6 +2662,8 @@ class AgentLoopController:
         pf_spec = data.get("power_factor", s.boundary_power_factor_default)
         candidate_set_spec = data.get("candidate_set", {})
         feasibility_spec = data.get("feasibility", {})
+        if not isinstance(feasibility_spec, dict):
+            feasibility_spec = {}
         vmin = feasibility_spec.get("Vmin", 0.9)
         vmax = feasibility_spec.get("Vmax", 1.1)
         q_frac = s.boundary_gen_q_frac
@@ -3245,6 +3268,8 @@ class AgentLoopController:
         description = data.get("description", "Hot reserve / N-1 generator security")
         reasoning = data.get("reasoning", "")
         feasibility_spec = data.get("feasibility", {})
+        if not isinstance(feasibility_spec, dict):
+            feasibility_spec = {}
         vmin = feasibility_spec.get("Vmin", 0.9)
         vmax = feasibility_spec.get("Vmax", 1.1)
         minimize = bool(data.get("minimize", False))
@@ -4994,7 +5019,22 @@ class AgentLoopController:
                 session.termination_reason = "user_stopped"
                 self._print("\nSearch stopped by user.")
                 break
-            action_type, should_continue = self._iteration(iteration, goal)
+            try:
+                action_type, should_continue = self._iteration(iteration, goal)
+            except Exception as e:
+                import traceback
+                self._print(
+                    f"\n[Iter {iteration}] Action failed with an internal error "
+                    f"({type(e).__name__}: {e}); discarding and continuing."
+                )
+                traceback.print_exc()
+                self._error_feedback = (
+                    f"The previous action raised an internal error and was discarded: "
+                    f"{type(e).__name__}: {e}. Respond with a well-formed action that "
+                    f"strictly follows the schema."
+                )
+                action_type, should_continue = "error", True
+                    
             if self._on_iteration:
                 latest_entry = self._journal.latest
                 if latest_entry:
