@@ -1243,11 +1243,17 @@ class AgentLoopController:
                     f"strictly follows the schema."
                 )
                 action_type, should_continue = "error", True
-            # Notify callback after each iteration
+            # Notify the UI only when THIS iteration actually recorded a journal
+            # entry. A discarded/invalid action (common with weak local models)
+            # appends nothing, so firing here would re-emit the PREVIOUS entry
+            # under this iteration's number — a phantom duplicate card. Show a
+            # transient "discarded" phase instead.
             if self._on_iteration:
                 latest_entry = self._journal.latest
-                if latest_entry:
+                if latest_entry is not None and latest_entry.iteration == iteration:
                     self._on_iteration(iteration, latest_entry, action_type, self._latest_opflow)
+                elif action_type == "error":
+                    self._emit_discarded(iteration)
             if not should_continue:
                 if not session.termination_reason:
                     session.termination_reason = "completed"
@@ -1259,16 +1265,12 @@ class AgentLoopController:
         if not session.termination_reason:
             session.termination_reason = "completed"
 
-        # Final notification with termination reason
-        if self._on_iteration:
-            latest_entry = self._journal.latest
-            if latest_entry:
-                self._on_iteration(
-                    latest_entry.iteration,
-                    latest_entry,
-                    session.termination_reason,
-                    self._latest_opflow,
-                )
+        # No final on_iteration re-emit: the last real entry was already sent by
+        # the per-iteration callback above. Re-emitting it duplicated the last
+        # timeline card, and when the final iterations were discarded it made a
+        # stale, lower-numbered entry appear AFTER the final iteration (e.g. a
+        # phantom "Iteration 6" after 20). The UI reads session.termination_reason
+        # when the search finishes.
 
         session.end_time = datetime.now().isoformat()
         session.total_prompt_tokens = self._total_prompt_tokens
@@ -1285,6 +1287,54 @@ class AgentLoopController:
         elapsed = time.monotonic() - session_start
         self._finalize(session, elapsed)
         return session
+
+    # ------------------------------------------------------------------
+    # Discarded-iteration diagnostic
+    # ------------------------------------------------------------------
+
+    def _emit_discarded(self, iteration: int) -> None:
+        """Emit a UI-only 'discarded' timeline card for an iteration whose action
+        was rejected (invalid/malformed proposal, unknown action, parse error)
+        and therefore recorded no journal entry.
+
+        The synthetic entry is deliberately NOT added to ``self._journal``: it
+        never affects summary stats, best-iteration selection, RAG exemplars, or
+        the persisted record. ``mode="discarded"`` keeps ``is_solve_iteration``
+        False, and ``feasible=False`` / ``objective_value=None`` keep it out of
+        the session_manager's best-cost tracking. It exists purely to tell the
+        user *why* the iteration produced nothing, instead of showing a phantom
+        duplicate or a blank card.
+        """
+        if not self._on_iteration:
+            return
+        reason = (self._error_feedback or "The model returned an invalid proposal.").strip()
+        # The UI label must attribute the failure to the MODEL, not the code:
+        # the raw feedback ("Unknown action X. Valid actions: ...") is written for
+        # the LLM and reads like a code assertion in the timeline. Keep only the
+        # first clause for the headline and prefix it clearly; the full corrective
+        # text still shows in the card's expander (llm_reasoning).
+        headline = reason.split(". ")[0].splitlines()[0].strip().rstrip(".")
+        if not headline:
+            headline = "invalid proposal"
+        headline = headline if len(headline) <= 120 else headline[:117] + "..."
+        synthetic = JournalEntry(
+            iteration=iteration,
+            description=f"LLM output rejected — {headline} (no change applied)",
+            commands=[],
+            objective_value=None,
+            feasible=False,
+            convergence_status="FAILED",
+            violations_count=0,
+            voltage_min=0.0,
+            voltage_max=0.0,
+            max_line_loading_pct=0.0,
+            total_gen_mw=0.0,
+            total_load_mw=0.0,
+            llm_reasoning=reason,  # full detail shown in the card's expander
+            mode="discarded",
+            elapsed_seconds=0.0,
+        )
+        self._on_iteration(iteration, synthetic, "discarded", None)
 
     # ------------------------------------------------------------------
     # Single iteration
@@ -5035,10 +5085,13 @@ class AgentLoopController:
                 )
                 action_type, should_continue = "error", True
                     
+            # Only emit when this iteration recorded a new entry (see run() above).
             if self._on_iteration:
                 latest_entry = self._journal.latest
-                if latest_entry:
+                if latest_entry is not None and latest_entry.iteration == iteration:
                     self._on_iteration(iteration, latest_entry, action_type, self._latest_opflow)
+                elif action_type == "error":
+                    self._emit_discarded(iteration)
             if not should_continue:
                 if not session.termination_reason:
                     session.termination_reason = "completed"
@@ -5050,14 +5103,8 @@ class AgentLoopController:
         if not session.termination_reason:
             session.termination_reason = "completed"
 
-        # Final notification
-        if self._on_iteration:
-            latest_entry = self._journal.latest
-            if latest_entry:
-                self._on_iteration(
-                    latest_entry.iteration, latest_entry,
-                    session.termination_reason, self._latest_opflow,
-                )
+        # No final on_iteration re-emit (see run() above) — it only duplicated
+        # the last timeline card.
 
         session.end_time = datetime.now().isoformat()
         session.total_prompt_tokens = self._total_prompt_tokens
