@@ -1,0 +1,24 @@
+{
+  "agentigrid_cmd": "agentigrid",
+  "project_root": ".",
+  "workdir": "workdir",
+  "out_dir": "experiments/ofrecord_v1",
+  "reps": 20,
+  "max_iter": 4,
+  "timeout_s": 1800,
+  "skip_existing": true,
+  "cases": [ { "name": "case39", "path": "./data/case39.m", "app": "opflow" } ],
+  "goals": [
+    { "id": "cost10",  "text": "Reduce total generation cost by 10%", "target_pct": 10 },
+    { "id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible" }
+  ],
+  "conditions": [
+    { "id": "C0-norag", "env": { "AGENTIGRID_RAG": "0" } },
+    { "id": "C1-basic", "env": { "AGENTIGRID_RAG": "1" } }
+  ],
+  "models": [
+    { "backend": "ollama",    "model": "llama3:latest",    "extra_args": [] },
+    { "backend": "ollama",    "model": "qwen2.5:7b",       "extra_args": [] },
+    { "backend": "anthropic", "model": "claude-sonnet-4-6", "extra_args": [] }
+  ]
+}
