@@ -439,7 +439,7 @@ def render_sidebar() -> dict:
         )
         stall_stop = st.checkbox(
             "Stop early if the model stalls",
-            value=True,
+            value=False,
             disabled=disabled,
             help=(
                 "End the search after N consecutive no-progress iterations "
@@ -879,8 +879,6 @@ def render_live_monitor():
                 f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
                 f"strip_min={_cfg.get('strip_min_score')}"
             )
-        elif _cfg.get("mode") == "basic":
-            st.caption(f"k={_cfg.get('k')}, min_score={_cfg.get('min_score')}")
             
     # 3. Two-column layout
     left_col, right_col = st.columns([2, 1])
@@ -1194,10 +1192,8 @@ def render_results():
                 f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
                 f"strip_min={_cfg.get('strip_min_score')}"
             )
-        elif _mode == "basic":
-            _details = f" — k={_cfg.get('k')}, min_score={_cfg.get('min_score')}"
         else:
-            _details = ""
+            _details = ""  # basic/off: the fixed defaults aren't worth showing
         st.caption(f"🔎 This run used RAG grounding (mode: {_mode}){_details}.")
         
     tab1, tab2, tab3 = st.tabs([
