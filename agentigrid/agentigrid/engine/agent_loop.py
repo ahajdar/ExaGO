@@ -1224,6 +1224,15 @@ class AgentLoopController:
 
         # 3. Agent loop
         max_iter = self._config.search.max_iterations
+        # Optional stall breaker: stop after N consecutive no-progress iterations
+        # (iterations that record no new journal entry — e.g. the model repeating
+        # an invalid action). 0/unset disables it. Set by the UI; the experiment
+        # harness leaves it unset so runs always reach max_iter and stay comparable.
+        try:
+            stall_limit = int(os.environ.get("AGENTIGRID_STALL_LIMIT", "0") or "0")
+        except ValueError:
+            stall_limit = 0
+        stall = 0
         for iteration in range(1, max_iter + 1):
             if self._stop_requested:
                 session.termination_reason = "user_stopped"
@@ -1244,17 +1253,29 @@ class AgentLoopController:
                     f"strictly follows the schema."
                 )
                 action_type, should_continue = "error", True
-            # Notify the UI only when THIS iteration actually recorded a journal
-            # entry. A discarded/invalid action (common with weak local models)
-            # appends nothing, so firing here would re-emit the PREVIOUS entry
-            # under this iteration's number — a phantom duplicate card. Show a
-            # transient "discarded" phase instead.
+            # Did THIS iteration record a journal entry? A discarded/invalid action
+            # (common with weak local models) appends nothing.
+            latest_entry = self._journal.latest
+            recorded = latest_entry is not None and latest_entry.iteration == iteration
+            # Notify the UI only on a real new entry; otherwise show a transient
+            # discarded card (avoids re-emitting the previous entry as a phantom).
             if self._on_iteration:
-                latest_entry = self._journal.latest
-                if latest_entry is not None and latest_entry.iteration == iteration:
+                if recorded:
                     self._on_iteration(iteration, latest_entry, action_type, self._latest_opflow)
                 elif action_type == "error":
                     self._emit_discarded(iteration)
+            # Stall breaker: count consecutive no-progress iterations.
+            if recorded:
+                stall = 0
+            elif stall_limit:
+                stall += 1
+                if stall >= stall_limit:
+                    session.termination_reason = "stalled_no_progress"
+                    self._print(
+                        f"\nStopping early: {stall} consecutive no-progress "
+                        f"iterations (stall limit {stall_limit})."
+                    )
+                    break
             if not should_continue:
                 if not session.termination_reason:
                     session.termination_reason = "completed"
@@ -1558,6 +1579,14 @@ class AgentLoopController:
             f"[Iter {iteration}] Applied {applied_count} command(s), "
             f"{skipped_count} skipped"
         )
+
+        # A modify that applied zero commands changes nothing — make the timeline
+        # say so instead of showing a blank "No description" card.
+        if applied_count == 0:
+            if not description or description == "No description":
+                description = "No commands applied (no change)"
+            else:
+                description = f"{description} — no commands applied"
 
         if all_errors:
             self._error_feedback = "Command errors:\n" + "\n".join(all_errors)
@@ -5065,6 +5094,11 @@ class AgentLoopController:
 
         # Continue the agent loop from last_iteration + 1
         max_iter = self._config.search.max_iterations
+        try:
+            stall_limit = int(os.environ.get("AGENTIGRID_STALL_LIMIT", "0") or "0")
+        except ValueError:
+            stall_limit = 0
+        stall = 0
         for iteration in range(last_iteration + 1, max_iter + 1):
             if self._stop_requested:
                 session.termination_reason = "user_stopped"
@@ -5087,12 +5121,25 @@ class AgentLoopController:
                 action_type, should_continue = "error", True
                     
             # Only emit when this iteration recorded a new entry (see run() above).
+            latest_entry = self._journal.latest
+            recorded = latest_entry is not None and latest_entry.iteration == iteration
             if self._on_iteration:
-                latest_entry = self._journal.latest
-                if latest_entry is not None and latest_entry.iteration == iteration:
+                if recorded:
                     self._on_iteration(iteration, latest_entry, action_type, self._latest_opflow)
                 elif action_type == "error":
                     self._emit_discarded(iteration)
+            # Stall breaker: count consecutive no-progress iterations.
+            if recorded:
+                stall = 0
+            elif stall_limit:
+                stall += 1
+                if stall >= stall_limit:
+                    session.termination_reason = "stalled_no_progress"
+                    self._print(
+                        f"\nStopping early: {stall} consecutive no-progress "
+                        f"iterations (stall limit {stall_limit})."
+                    )
+                    break
             if not should_continue:
                 if not session.termination_reason:
                     session.termination_reason = "completed"

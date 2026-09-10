@@ -37,6 +37,7 @@ from charts import (
 )
 
 from agentigrid.parsers import parse_matpower, network_summary
+from agentigrid.engine.journal import NON_SOLVE_STATUSES
 
 # ── Page Configuration ───────────────────────────────────────────────────────
 
@@ -168,7 +169,9 @@ def start_search(base_case_path, goal, backend, model, temperature,
     st.session_state.search_paused = False
     st.session_state.explore_status = None
     st.session_state.rag_last_refs = None
+    st.session_state.rag_run_config = None
     st.session_state.rag_run_enabled = os.environ.get("AGENTIGRID_RAG") == "1"
+    st.session_state.rag_run_mode = os.environ.get("AGENTIGRID_RAG_MODE") or ("basic" if st.session_state.rag_run_enabled else "off")
 
     try:
         manager.start_search(config_overrides=overrides, goal=goal)
@@ -223,17 +226,41 @@ def render_sidebar() -> dict:
         
         # ── Advanced ─────────────────────────────────────────────────────
         with st.expander("🔧 Advanced"):
-            use_reference_knowledge = st.checkbox(
-                "Use curated reference knowledge (RAG)",
-                value=True,
+            rag_mode = st.radio(
+                "Reference knowledge (RAG)",
+                options=["off", "basic", "corrective"],
+                index=1,  # default: basic (preserves prior on-by-default behavior)
+                format_func=lambda m: {
+                    "off": "Off — no grounding",
+                    "basic": "Basic",
+                    "corrective": "Corrective (experimental)",
+                }[m],
+                horizontal=True,
                 disabled=disabled,
                 help=(
-                    "Ground the AI's proposals in a curated knowledge base "
-                    "(tool docs, methodology, example specifications) via retrieval. "
-                    "Improves setup quality; uncheck to compare without it."
+                    "Ground the AI's proposals in a curated knowledge base via retrieval. "
+                    "Basic returns the top matches above a similarity threshold. "
+                    "Corrective grades the retrieval and withholds weak context "
+                    "(needs threshold calibration — see the note when selected)."
                 ),
             )
-        os.environ["AGENTIGRID_RAG"] = "1" if use_reference_knowledge else "0"
+            if rag_mode == "corrective":
+                st.info(
+                    "**Corrective RAG — calibrate before trusting results.**\n\n"
+                    "1. Build + ingest the corpus first (harvest tools → `ingest`).\n"
+                    "2. Run a few searches and watch the grounding indicator's scores "
+                    "to see your similarity distribution.\n"
+                    "3. Set thresholds in `rag/corrective.py`: `tau_upper` (score treated "
+                    "as \"correct\"), `tau_lower` (below → \"incorrect\", context withheld), "
+                    "`strip_min_score` (refinement cutoff). Defaults 0.50 / 0.30 / 0.30 are "
+                    "**starting points, not calibrated**.\n\n"
+                    "Corrective withholds context on low confidence, so on a thin or "
+                    "uncalibrated corpus it may behave like the baseline — that is expected."
+                )
+        # AGENTIGRID_RAG_MODE is the mode axis; keep the legacy AGENTIGRID_RAG flag
+        # in sync so the existing grounding indicator (which checks it) still works.
+        os.environ["AGENTIGRID_RAG_MODE"] = rag_mode
+        os.environ["AGENTIGRID_RAG"] = "0" if rag_mode == "off" else "1"
 
         # ── Search Parameters ────────────────────────────────────────────
         st.header("⚙️ Search Parameters")
@@ -410,6 +437,23 @@ def render_sidebar() -> dict:
         max_iterations = st.slider(
             "Max iterations", 1, 50, 20, disabled=disabled,
         )
+        stall_stop = st.checkbox(
+            "Stop early if the model stalls",
+            value=True,
+            disabled=disabled,
+            help=(
+                "End the search after N consecutive no-progress iterations "
+                "(the model repeating an invalid action or applying no change). "
+                "Saves iterations when a model is stuck. Uncheck for experiments "
+                "so runs always reach Max iterations."
+            ),
+        )
+        stall_limit = st.number_input(
+            "Stop after N no-progress iterations",
+            min_value=2, max_value=20, value=5, step=1,
+            disabled=disabled or not stall_stop,
+        )
+        os.environ["AGENTIGRID_STALL_LIMIT"] = str(int(stall_limit)) if stall_stop else "0"
         mpi_disabled = disabled or application not in ("scopflow", "sopflow")
         mpi_np = st.number_input(
             "MPI processes",
@@ -750,6 +794,7 @@ def render_live_monitor():
                 st.session_state.base_opflow = manager.get_base_opflow()
                 st.session_state.best_opflow = manager.get_best_opflow()
                 st.session_state.goal_classification = manager.get_goal_classification()
+                st.session_state.rag_run_config = manager.get_rag_config()
                 # Append to session history
                 session = manager.get_session()
                 if session:
@@ -803,6 +848,7 @@ def render_live_monitor():
         st.session_state.base_opflow = manager.get_base_opflow()
         st.session_state.best_opflow = manager.get_best_opflow()
         st.session_state.goal_classification = manager.get_goal_classification()
+        st.session_state.rag_run_config = manager.get_rag_config()
         if not st.session_state.search_error:
             st.session_state.search_error = "Search thread terminated unexpectedly."
         st.rerun()
@@ -811,15 +857,30 @@ def render_live_monitor():
     # 2. Header
     st.header("🔄 Search in Progress...")
 
-    _rag_on = os.environ.get("AGENTIGRID_RAG") == "1"
+    _rag_mode = os.environ.get("AGENTIGRID_RAG_MODE") or ("basic" if os.environ.get("AGENTIGRID_RAG") == "1" else "off")
+    _rag_on = _rag_mode != "off"
     _refs = st.session_state.get("rag_last_refs")
     _top = st.session_state.get("rag_top_score")
     if _rag_on:
-        if _refs and _refs > 0:
-            _s = f" · top score {_top:.2f}" if _top else ""
-            st.caption(f"🔎 Grounding: {_refs} reference(s) retrieved from the knowledge base{_s}")
+        # Pull the effective retriever config (thresholds etc.) from the running
+        # controller so Live shows the same values as the Search-Complete page.
+        if not st.session_state.get("rag_run_config") and manager is not None:
+            st.session_state.rag_run_config = manager.get_rag_config()
+        _cfg = st.session_state.get("rag_run_config") or {}
+        if _refs is not None:
+            _s = f" · top {_top:.2f}" if _top else ""
+            # For corrective, 0 refs means context was withheld (low confidence).
+            st.caption(f"🔎 Grounding: {_rag_mode} · {_refs} ref(s){_s}")
         else:
-            st.caption("🔎 Grounding: enabled (curated reference knowledge)")
+            st.caption(f"🔎 Grounding: {_rag_mode} · enabled")
+        if _cfg.get("mode") == "corrective":
+            st.caption(
+                f"k={_cfg.get('k')}, min_score={_cfg.get('min_score')}, "
+                f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
+                f"strip_min={_cfg.get('strip_min_score')}"
+            )
+        elif _cfg.get("mode") == "basic":
+            st.caption(f"k={_cfg.get('k')}, min_score={_cfg.get('min_score')}")
             
     # 3. Two-column layout
     left_col, right_col = st.columns([2, 1])
@@ -830,15 +891,23 @@ def render_live_monitor():
             icon = _iteration_icon(entry)
             obj = entry.get("objective_value")
             is_pflow_live = st.session_state.get("current_application") == "pflow"
-            if is_pflow_live:
-                obj_str = "analysis" if obj is not None else "FAILED"
+            # An entry with no objective is only "FAILED" if it was a real solve
+            # that did not converge. Analysis/complete/sweep/contingency/explore
+            # markers and discarded proposals carry no cost — they are not failures.
+            cs = entry.get("convergence_status") or ""
+            _no_solve = cs in NON_SOLVE_STATUSES or entry.get("mode") == "discarded"
+            if obj is not None:
+                obj_str = "analysis" if is_pflow_live else f"${obj:,.2f}"
+            elif _no_solve:
+                obj_str = ""            # no cost, but not a failure — omit the segment
             else:
-                obj_str = f"${obj:,.2f}" if obj is not None else "FAILED"
+                obj_str = "FAILED"      # a solve that genuinely did not converge
             elapsed = entry.get("sim_elapsed")
             time_str = f"{elapsed:.1f}s" if elapsed is not None else "—"
+            _cost_seg = f" — {obj_str}" if obj_str else ""
             label = (
                 f"{icon} Iteration {entry['iteration']}: "
-                f"{entry['description']} — {obj_str} ({time_str})"
+                f"{entry['description']}{_cost_seg} ({time_str})"
             )
 
             with st.expander(label):
@@ -1117,7 +1186,19 @@ def render_results():
     if _rag_used is None:
         _rag_used = st.session_state.get("rag_run_enabled")
     if _rag_used:
-        st.caption("🔎 This run used curated reference grounding (RAG).")
+        _cfg = st.session_state.get("rag_run_config") or {}
+        _mode = _cfg.get("mode", st.session_state.get("rag_run_mode", "basic"))
+        if _mode == "corrective":
+            _details = (
+                f" — k={_cfg.get('k')}, min_score={_cfg.get('min_score')}, "
+                f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
+                f"strip_min={_cfg.get('strip_min_score')}"
+            )
+        elif _mode == "basic":
+            _details = f" — k={_cfg.get('k')}, min_score={_cfg.get('min_score')}"
+        else:
+            _details = ""
+        st.caption(f"🔎 This run used RAG grounding (mode: {_mode}){_details}.")
         
     tab1, tab2, tab3 = st.tabs([
         "📊 Overview", "🔍 Detailed Results", "📝 Analysis & Report",

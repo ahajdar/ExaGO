@@ -99,6 +99,18 @@ class CorrectiveRetriever:
         # the cosine scores in _grade(). Everything else stays identical.
         self._grader = grader
 
+    def describe(self) -> dict:
+        """Effective configuration for this run (shown in the UI / logged)."""
+        return {
+            "mode": "corrective",
+            "enabled": self.enabled,
+            "k": self.k,
+            "min_score": getattr(self._base, "min_score", None),
+            "tau_lower": self.tau_lower,
+            "tau_upper": self.tau_upper,
+            "strip_min_score": self.strip_min_score,
+        }
+
     # -- grading -------------------------------------------------------
     def _scores(self, query: str, hits: list[Hit]) -> list[float]:
         if self._grader is not None:

@@ -61,6 +61,15 @@ class Retriever:
             "do not invent facts beyond it.\n" + "\n".join(lines)
         )
 
+    def describe(self) -> dict:
+        """Effective configuration for this run (shown in the UI / logged)."""
+        return {
+            "mode": "basic",
+            "enabled": self.enabled,
+            "k": self.k,
+            "min_score": self.min_score,
+        }
+
     def query_hits(self, query: str, k: Optional[int] = None) -> list[tuple[str, dict, float]]:
         """Raw scored hits (document, metadata, similarity), best first, with NO
         ``min_score`` filtering. Advanced modes (e.g. Corrective RAG) grade these
