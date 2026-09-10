@@ -11,7 +11,7 @@ import re
 import statistics
 import threading
 import time
-from agentigrid.rag import Retriever
+from agentigrid.rag import build_retriever
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -767,9 +767,10 @@ class AgentLoopController:
     ) -> None:
         self._config = config
         self._backend: LLMBackend = create_backend(config.llm)
-        self._retriever = Retriever(
-            enabled=os.environ.get("AGENTIGRID_RAG", "0") == "1",
-            # host=getattr(config.llm, "ollama_host", "http://localhost:11434"),
+        # Mode-aware: AGENTIGRID_RAG_MODE ∈ {off, basic, corrective}; the legacy
+        # AGENTIGRID_RAG=1/0 switch still maps to basic/off. All modes expose the
+        # same .enabled / .retrieve() surface, so nothing else here changes.
+        self._retriever = build_retriever(
             host=os.environ.get("OLLAMA_HOST") or getattr(config.llm, "ollama_host", None) or "http://localhost:11434",
         )
         self._executor = SimulationExecutor(config.exago, config.output)

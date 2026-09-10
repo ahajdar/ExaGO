@@ -23,7 +23,7 @@ class Retriever:
         collection: str = "agentigrid_kb",
         host: str = "http://localhost:11434",
         model: str = "nomic-embed-text",
-        k: int = 6,
+        k: int = 3,
         min_score: float = 0.35,
     ):
         self.enabled = enabled
@@ -60,6 +60,27 @@ class Retriever:
             "Use the following retrieved reference material only when relevant; "
             "do not invent facts beyond it.\n" + "\n".join(lines)
         )
+
+    def query_hits(self, query: str, k: Optional[int] = None) -> list[tuple[str, dict, float]]:
+        """Raw scored hits (document, metadata, similarity), best first, with NO
+        ``min_score`` filtering. Advanced modes (e.g. Corrective RAG) grade these
+        with their own thresholds. Returns [] on disabled/empty/any failure.
+        """
+        if not self.enabled or self._store is None or not query:
+            return []
+        try:
+            return self._store.query(query, k or self.k)
+        except Exception:
+            return []
+
+    def embed_text(self, text: str) -> list[float]:
+        """Embed `text` with the same Ollama host/model as the store, for
+        strip-level re-scoring in advanced modes. Raises on failure (callers
+        that must degrade gracefully wrap this in try/except).
+        """
+        from .embed import embed as _embed
+
+        return _embed(text, self._store._host, self._store._model)
 
     @classmethod
     def from_config(cls, cfg) -> "Retriever":
