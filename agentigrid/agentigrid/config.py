@@ -35,7 +35,7 @@ DEFAULTS: dict[str, Any] = {
     },
     "llm": {
         "backend": "anthropic",
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "api_key_env": "ANTHROPIC_API_KEY",
         "openai_base_url": None,
         "ollama_host": "http://localhost:11434",
