@@ -50,7 +50,7 @@ def test_n1_degenerate_when_scopflow_already_feasible():
 def test_scopflow_args_match_agentigrid():
     a = pc.scopflow_args(Path("c.cont"), 1)
     assert a[0] == "-ctgcfile" and a[1].endswith("c.cont") and a[2:] == ["-scopflow_Nc", "-1"]
-    assert pc.scopflow_args(Path("c.cont"), 4)[-2:] == ["-scopflow_solver", "EMPAR"]
+    assert "EMPAR" not in pc.scopflow_args(Path("c.cont"), 4)   # coupled solve only
 
 
 def test_write_stressed_scales_loads(tmp_path):

@@ -137,3 +137,14 @@ def test_repo_spec_goals_have_valid_predicates():
                                    (29, 2.045), (35, 2.042), (50, 2.021), (1000, 1.980)])
 def test_t975_exact_or_conservative(df, t):
     assert ev.t975(df) == t
+
+
+def test_n1_rejects_empar_uncoupled_solve():
+    g = {"success": "n1_secure"}
+    empar = SCOPF_ALL + ["-scopflow_solver", "EMPAR"]
+    entries = [_solve(0, feasible=False, argv=SCOPF_ALL, app="scopflow"),
+               _solve(1, argv=empar, app="scopflow")]
+    assert ev.attainment_for(entries, g, 100.0)["goal_attained"] == 0
+    ipopt = SCOPF_ALL + ["-scopflow_solver", "IPOPT"]
+    entries[1] = _solve(1, argv=ipopt, app="scopflow")
+    assert ev.attainment_for(entries, g, 100.0)["goal_attained"] == 1

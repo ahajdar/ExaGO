@@ -87,7 +87,9 @@ def base_cost(entries):
 #   * "success": "n1_secure"  -> a SCOPFLOW solve that converged feasibly with a
 #                                contingency file AND all contingencies selected
 #                                (-scopflow_Nc -1; the ExaGO default of 0 would
-#                                silently solve the base case only);
+#                                silently solve the base case only) AND a coupled
+#                                solver (not EMPAR, which solves contingencies
+#                                independently);
 #   * "success": "no_violations" -> a solve that converged with no voltage, thermal
 #                                or power-balance violation (journal ``feasible`` is
 #                                True only when violations_count == 0).
@@ -124,6 +126,18 @@ def all_contingencies_selected(e) -> bool:
     return i + 1 < len(argv) and str(argv[i + 1]).strip() == "-1"
 
 
+def coupled_scopf_solver(e) -> bool:
+    """False when SCOPFLOW ran with EMPAR. Per the ExaGO manual, EMPAR "does not
+    solve the security-constrained ACOPF problem"; it solves the base case and each
+    contingency independently, so its dispatch is not N-1 secure. (AgentiGrid
+    selects EMPAR automatically when exago.mpi_np > 1.)"""
+    argv = [str(a).upper() for a in _argv(e)]
+    if "-SCOPFLOW_SOLVER" in argv:
+        i = argv.index("-SCOPFLOW_SOLVER")
+        return not (i + 1 < len(argv) and argv[i + 1] == "EMPAR")
+    return True
+
+
 def _single_solve(e) -> bool:
     """A scalar solve entry (not analysis/complete/sweep/explore/failed). Journals
     written before invocation records existed have no ``exago_command``; they still
@@ -140,7 +154,8 @@ def entry_attains(e, goal: dict, base_cost) -> bool:
         return False
     success = goal.get("success")
     if success == "n1_secure":
-        return "scopflow" in _application(e) and all_contingencies_selected(e)
+        return ("scopflow" in _application(e) and all_contingencies_selected(e)
+                and coupled_scopf_solver(e))
     if success == "no_violations":
         return (e.get("violations_count") or 0) == 0
     target = goal.get("target_pct")

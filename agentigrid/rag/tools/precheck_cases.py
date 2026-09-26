@@ -161,8 +161,9 @@ def scopflow_args(ctgc: Path, mpi_np: int) -> list[str]:
     # Absolute: ExaGO runs with cwd = its per-iteration run dir, so a relative path
     # would not resolve (AgentiGrid's config loader makes ctgc_file absolute too).
     args = ["-ctgcfile", str(Path(ctgc).resolve()), "-scopflow_Nc", "-1"]
-    if mpi_np > 1:
-        args += ["-scopflow_solver", "EMPAR"]
+    # Deliberately NOT switching to EMPAR when mpi_np > 1 (AgentiGrid does):
+    # EMPAR solves the base case and contingencies independently, so it cannot
+    # tell whether an N-1-secure dispatch exists.
     return args
 
 
