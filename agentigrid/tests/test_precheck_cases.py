@@ -154,3 +154,29 @@ def test_unphysical_slack_makes_pflow_goal_unusable():
     assert pc.check_goal("relieve", r) is False
     r["_slack_check"] = {"within_limits": True}
     assert pc.check_goal("relieve", r) is True
+
+
+# --- single-branch outages (relieve stress) ----------------------------------
+
+def test_parse_outage():
+    assert pc.parse_outage("12-34") == (12, 34, 0)
+    assert pc.parse_outage("12-34-1") == (12, 34, 1)
+    with pytest.raises(ValueError):
+        pc.parse_outage("12")
+
+
+@needs_200
+def test_branch_keys_islanding_and_outage_variant(tmp_path):
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    base = parse_matpower(G200)
+    keys = pc.branch_keys(base)
+    assert len(keys) == len(base.branches) and len(set(keys)) == len(keys)
+    # a radial branch (one endpoint of degree 1) islands; count that some do and some don't
+    flags = [pc.islands_without(base, i) for i in range(len(base.branches))]
+    assert any(flags) and not all(flags)
+    i = flags.index(False)
+    out = pc.write_stressed(G200, 1.0, tmp_path, outage=keys[i])
+    net = parse_matpower(out)
+    assert net.branches[i].status == 0
+    assert sum(br.status == 0 for br in net.branches) == sum(br.status == 0 for br in base.branches) + 1
+    assert out.name == f"case_ACTIVSg200_load1_out{keys[i][0]}-{keys[i][1]}" + (f"-{keys[i][2]}" if keys[i][2] else "") + ".m"

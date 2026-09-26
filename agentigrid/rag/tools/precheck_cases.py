@@ -304,7 +304,57 @@ def agc_redispatch(net, delta_mw: float):
     return net
 
 
-def stressed_network(base_net, factor: float, agc: bool = False):
+def branch_keys(net) -> list[tuple[int, int, int]]:
+    """(fbus, tbus, ckt) per branch, ckt = 0-based ordinal among parallel branches
+    of the same bus pair -- the addressing AgentiGrid's set_branch_status uses."""
+    seen: dict[tuple[int, int], int] = {}
+    keys = []
+    for br in net.branches:
+        pair = (min(br.fbus, br.tbus), max(br.fbus, br.tbus))
+        k = seen.get(pair, 0)
+        seen[pair] = k + 1
+        keys.append((br.fbus, br.tbus, k))
+    return keys
+
+
+def parse_outage(text: str) -> tuple[int, int, int]:
+    """'FBUS-TBUS' or 'FBUS-TBUS-CKT' -> (fbus, tbus, ckt)."""
+    parts = [int(x) for x in text.split("-")]
+    if len(parts) not in (2, 3):
+        raise ValueError(f"outage must be FBUS-TBUS[-CKT], got {text!r}")
+    return (parts[0], parts[1], parts[2] if len(parts) == 3 else 0)
+
+
+def islands_without(net, skip_index: int) -> bool:
+    """True if taking branch *skip_index* out splits the in-service network."""
+    buses = [b.bus_i for b in net.buses if b.type != 4]
+    adj: dict[int, list[int]] = {b: [] for b in buses}
+    for i, br in enumerate(net.branches):
+        if i == skip_index or br.status != 1 or br.fbus not in adj or br.tbus not in adj:
+            continue
+        adj[br.fbus].append(br.tbus)
+        adj[br.tbus].append(br.fbus)
+    if not buses:
+        return False
+    seen, stack = {buses[0]}, [buses[0]]
+    while stack:
+        for nb in adj[stack.pop()]:
+            if nb not in seen:
+                seen.add(nb)
+                stack.append(nb)
+    return len(seen) != len(buses)
+
+
+def with_outage(net, outage: tuple[int, int, int]):
+    from agentigrid.engine.commands import SetBranchStatus
+    from agentigrid.engine.modifier import apply_modifications
+
+    fbus, tbus, ckt = outage
+    out, _ = apply_modifications(net, [SetBranchStatus(fbus=fbus, tbus=tbus, status=0, ckt=ckt)])
+    return out
+
+
+def stressed_network(base_net, factor: float, agc: bool = False, outage=None):
     from agentigrid.engine.commands import ScaleAllLoads
     from agentigrid.engine.modifier import apply_modifications
 
@@ -312,16 +362,21 @@ def stressed_network(base_net, factor: float, agc: bool = False):
     if agc:
         delta = sum(b.Pd for b in net.buses) - sum(b.Pd for b in base_net.buses)
         net = agc_redispatch(net, delta)
+    if outage is not None:
+        net = with_outage(net, outage)
     return net
 
 
 def write_stressed(case: Path, factor: float, out_dir: Path,
-                   vband: tuple[float, float] | None = None, agc: bool = False) -> Path:
+                   vband: tuple[float, float] | None = None, agc: bool = False,
+                   outage: tuple[int, int, int] | None = None) -> Path:
     from agentigrid.parsers.matpower_parser import parse_matpower
     from agentigrid.parsers.matpower_writer import write_matpower
 
-    net = stressed_network(parse_matpower(case), factor, agc)
+    net = stressed_network(parse_matpower(case), factor, agc, outage)
     suffix = f"_load{factor:g}" + ("_agc" if agc else "")
+    if outage is not None:
+        suffix += f"_out{outage[0]}-{outage[1]}" + (f"-{outage[2]}" if outage[2] else "")
     if vband is not None:
         for b in net.buses:
             b.Vmin, b.Vmax = vband
@@ -330,6 +385,54 @@ def write_stressed(case: Path, factor: float, out_dir: Path,
     out = out_dir / f"{case.stem}{suffix}.m"
     write_matpower(net, out)
     return out
+
+
+def outage_scan(cfg, case: Path, scale: float, agc: bool, vband, top: int = 15) -> list[dict]:
+    """Single-branch outages at one load level: PFLOW for every non-islanding
+    outage, then OPFLOW for the *top* outages by overload count / max loading.
+    A usable relieve case: PFLOW converges with >= 1 overload, the slack stays
+    inside its limits, and OPFLOW with the outage is feasible (a fix exists)."""
+    from agentigrid.engine.executor import SimulationExecutor
+    from agentigrid.parsers import parse_simulation_result_for_app
+    from agentigrid.parsers.matpower_parser import parse_matpower
+
+    base_file = parse_matpower(case)
+    base = base_file if abs(scale - 1.0) < 1e-12 else stressed_network(base_file, scale, agc)
+    limits = {b.bus_i: (vband if vband else (b.Vmin, b.Vmax)) for b in base.buses}
+    sc = slack_check(base, base_file)
+    if not agc and not sc["within_limits"]:
+        print(f"WARNING: at x{scale} the slack leaves its limits without --agc; results are not physical.")
+    executor = SimulationExecutor(cfg.exago, cfg.output)
+    keys = branch_keys(base)
+    rows: list[dict] = []
+    n_island = 0
+    for i, (br, key) in enumerate(zip(base.branches, keys)):
+        if br.status != 1:
+            continue
+        if islands_without(base, i):
+            n_island += 1
+            continue
+        net = with_outage(base, key)
+        sim = executor.run(net, application="pflow", iteration=960)
+        res = parse_simulation_result_for_app(sim, "pflow", bus_limits=limits) if sim.success else None
+        rec = summarize_result(res, sim)
+        rows.append({"outage": key, "rateA": br.rateA, "pflow": rec})
+    usable = [r for r in rows if _pflow_usable(r["pflow"]) and r["pflow"].get("thermal_violations", 0) > 0]
+    usable.sort(key=lambda r: (-r["pflow"].get("thermal_violations", 0), -r["pflow"].get("max_line_loading_pct", 0)))
+    for r in usable[:top]:
+        net = with_outage(base, r["outage"])
+        sim = executor.run(net, application="opflow", iteration=961)
+        res = parse_simulation_result_for_app(sim, "opflow", bus_limits=limits) if sim.success else None
+        r["opflow"] = summarize_result(res, sim)
+    print(f"x{scale}{' (agc)' if agc else ''}: {len(rows)} outages solved, {n_island} skipped (would island), "
+          f"{len(usable)} with PFLOW overloads; top {min(top, len(usable))}:")
+    print("  outage (f-t-ckt)   overloads  maxload%  V-viol  OPFLOW       cost")
+    for r in usable[:top]:
+        p, o = r["pflow"], r.get("opflow", {})
+        f, t, c = r["outage"]
+        print(f"  {f:>5}-{t:<5}-{c:<3}   {p.get('thermal_violations', 0):>6}    {p.get('max_line_loading_pct', '-'):>7}  "
+              f"{p.get('voltage_violations', 0):>5}   {('feasible' if _feasible(o) else o.get('feasibility') or o.get('status')):<11} {o.get('objective')}")
+    return rows
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -349,6 +452,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--agc", action="store_true",
                     help="share the load change among online non-slack units in proportion to "
                          "Pmax (AGC-style) instead of leaving it all to the slack unit")
+    ap.add_argument("--outage", metavar="FBUS-TBUS[-CKT]",
+                    help="with --write-stressed: also take this branch out of service")
+    ap.add_argument("--outage-scan", type=float, metavar="F",
+                    help="scan single-branch outages at load scale F (PFLOW, then OPFLOW for the "
+                         "top candidates) and exit")
+    ap.add_argument("--top", type=int, default=15, help="outage-scan: candidates to check with OPFLOW")
     args = ap.parse_args(argv)
 
     case, ctgc = Path(args.case), Path(args.ctgc)
@@ -362,8 +471,20 @@ def main(argv: list[str] | None = None) -> int:
         vband = (lo, hi)
 
     if args.write_stressed is not None:
-        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband, args.agc)
+        outage = parse_outage(args.outage) if args.outage else None
+        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband, args.agc, outage)
         print(f"Wrote stressed variant: {out}\nPoint the spec's pflow (and/or scopflow) case entry at it.")
+        return 0
+
+    if args.outage_scan is not None:
+        from agentigrid.config import load_config
+        cfg = load_config(args.config) if args.config else load_config(None)
+        rows = outage_scan(cfg, case, args.outage_scan, args.agc, vband, args.top)
+        if args.json:
+            Path(args.json).write_text(json.dumps({
+                "case": str(case), "scale": args.outage_scan, "agc": args.agc,
+                "timestamp": datetime.now().isoformat(),
+                "rows": [{**r, "outage": list(r["outage"])} for r in rows]}, indent=2))
         return 0
 
     apps = tuple(a.strip() for a in args.apps.split(",") if a.strip())
