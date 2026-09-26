@@ -112,6 +112,9 @@ def check_goal(goal: str, r: dict[str, dict]):
     p = r.get("pflow")
     if not _ran(p):
         return None
+    sc = r.get("_slack_check")
+    if isinstance(sc, dict) and not sc.get("within_limits", True):
+        return False                # slack outside its limits: not a physical operating point
     if goal == "relieve":
         return _pflow_usable(p) and p.get("thermal_violations", 0) > 0
     if goal == "voltage":
@@ -128,6 +131,9 @@ def classify(results: dict[float, dict[str, dict]]) -> dict:
                  (so N-1 security is the binding issue, not base infeasibility);
       relieve -> PFLOW converges and shows >= 1 thermal overload;
       voltage -> PFLOW converges and shows >= 1 bus-voltage violation.
+    For PFLOW goals the operating point must also be physical: with plain load
+    scaling the slack unit absorbs the whole change, and a scale that pushes it
+    outside [Pmin, Pmax] is rejected (use --agc to share the change instead).
     A scale where a required solve failed to run is UNDETERMINED, not usable.
     """
     scales = sorted(results)
@@ -177,7 +183,7 @@ def scopflow_args(ctgc: Path, mpi_np: int) -> list[str]:
 
 
 def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, ...],
-             vband: tuple[float, float] | None = None):
+             vband: tuple[float, float] | None = None, agc: bool = False):
     from agentigrid.engine.commands import ScaleAllLoads
     from agentigrid.engine.executor import SimulationExecutor
     from agentigrid.engine.modifier import apply_modifications
@@ -193,8 +199,19 @@ def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, 
     for i, s in enumerate(scales):
         net = base_net
         if abs(s - 1.0) > 1e-12:
-            net, _report = apply_modifications(base_net, [ScaleAllLoads(factor=s)])
+            try:
+                net = stressed_network(base_net, s, agc)
+            except ValueError as exc:
+                print(f"  x{s:<5} skipped: {exc}")
+                results[s] = {"_skipped": str(exc)}
+                continue
         results[s] = {}
+        sc = slack_check(net, base_net) if not agc else None
+        if sc is not None and not sc["within_limits"]:
+            sl = sc["slack"][0]
+            print(f"  x{s:<5} WARNING: slack bus {sl['bus']} would carry ~{sl['Pg_est']} MW, outside "
+                  f"[{sl['Pmin']}, {sl['Pmax']}] (losses ignored) -- PFLOW point is not physical; use --agc")
+        results[s]["_slack_check"] = sc
         for app in apps:
             extra = scopflow_args(ctgc, cfg.exago.mpi_np) if app == "scopflow" else None
             sim = executor.run(net, application=app, iteration=900 + i, extra_args=extra)
@@ -214,15 +231,97 @@ def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, 
     return results
 
 
-def write_stressed(case: Path, factor: float, out_dir: Path,
-                   vband: tuple[float, float] | None = None) -> Path:
+RENEWABLE_FUELS = ("wind", "solar")
+
+
+def _gen_fuels(net) -> list[str]:
+    """Fuel label per generator from mpc.genfuel ('' when absent)."""
+    raw = net.extra_sections.get("genfuel", "")
+    fuels = []
+    for line in raw.split("\n"):
+        t = line.strip().strip("';").strip()
+        if t and not t.startswith("%") and not t.startswith("mpc.") and t not in ("{", "}"):
+            fuels.append(t.lower())
+    return fuels + [""] * (len(net.generators) - len(fuels))
+
+
+def slack_check(net, base_net) -> dict:
+    """Where the slack unit lands if it alone picks up the load change of *net*
+    relative to *base_net* (losses ignored), and whether that is inside its limits.
+    Plain load scaling leaves every other set-point unchanged, so in PFLOW the
+    slack absorbs the whole change; outside [Pmin, Pmax] the operating point is
+    not physical."""
+    ref = {b.bus_i for b in net.buses if b.type == 3}
+    delta = sum(b.Pd for b in net.buses) - sum(b.Pd for b in base_net.buses)
+    out = []
+    for g in net.generators:
+        if g.status == 1 and g.bus in ref:
+            est = g.Pg + delta
+            out.append({"bus": g.bus, "Pg_est": round(est, 1), "Pmin": g.Pmin, "Pmax": g.Pmax,
+                        "within_limits": g.Pmin - 1e-6 <= est <= g.Pmax + 1e-6})
+            delta = 0.0     # first slack unit takes it all
+    return {"load_change_mw": round(sum(b.Pd for b in net.buses) - sum(b.Pd for b in base_net.buses), 1),
+            "slack": out, "within_limits": all(x["within_limits"] for x in out)}
+
+
+def agc_redispatch(net, delta_mw: float):
+    """Share a load change of *delta_mw* among the online non-slack units, in
+    proportion to their Pmax (a common AGC participation convention), clipped to
+    unit limits and re-shared until absorbed. Thermal units move within
+    [Pmin, Pmax]; wind/solar can be curtailed down to 0 but not raised above
+    their forecast (the Pg in the file). The slack unit is left to cover losses.
+    Returns a modified deep copy; raises ValueError if the fleet cannot absorb it."""
+    import copy
+
+    net = copy.deepcopy(net)
+    fuels = _gen_fuels(net)
+    ref = {b.bus_i for b in net.buses if b.type == 3}
+    lo, hi = {}, {}
+    for i, g in enumerate(net.generators):
+        if g.status != 1 or g.bus in ref or g.Pmax <= 0:
+            continue
+        ren = fuels[i] in RENEWABLE_FUELS
+        lo[i] = 0.0 if ren else g.Pmin
+        hi[i] = g.Pg if ren else g.Pmax
+    remaining = float(delta_mw)
+    for _ in range(len(lo) + 1):
+        up = remaining > 0
+        active = [i for i in lo
+                  if (net.generators[i].Pg < hi[i] - 1e-9 if up else net.generators[i].Pg > lo[i] + 1e-9)]
+        weight = sum(net.generators[i].Pmax for i in active)
+        if abs(remaining) < 1e-6 or weight <= 0:
+            break
+        moved = 0.0
+        for i in active:
+            g = net.generators[i]
+            new = min(hi[i], max(lo[i], g.Pg + remaining * g.Pmax / weight))
+            moved += new - g.Pg
+            g.Pg = new
+        remaining -= moved
+    if abs(remaining) > 1e-6:
+        raise ValueError(f"AGC redispatch cannot absorb {delta_mw:.1f} MW "
+                         f"({remaining:.1f} MW left at unit limits)")
+    return net
+
+
+def stressed_network(base_net, factor: float, agc: bool = False):
     from agentigrid.engine.commands import ScaleAllLoads
     from agentigrid.engine.modifier import apply_modifications
+
+    net, _ = apply_modifications(base_net, [ScaleAllLoads(factor=factor)])
+    if agc:
+        delta = sum(b.Pd for b in net.buses) - sum(b.Pd for b in base_net.buses)
+        net = agc_redispatch(net, delta)
+    return net
+
+
+def write_stressed(case: Path, factor: float, out_dir: Path,
+                   vband: tuple[float, float] | None = None, agc: bool = False) -> Path:
     from agentigrid.parsers.matpower_parser import parse_matpower
     from agentigrid.parsers.matpower_writer import write_matpower
 
-    net, _ = apply_modifications(parse_matpower(case), [ScaleAllLoads(factor=factor)])
-    suffix = f"_load{factor:g}"
+    net = stressed_network(parse_matpower(case), factor, agc)
+    suffix = f"_load{factor:g}" + ("_agc" if agc else "")
     if vband is not None:
         for b in net.buses:
             b.Vmin, b.Vmax = vband
@@ -247,6 +346,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--vband", metavar="LO,HI",
                     help="judge bus-voltage violations against this band (pu) instead of the "
                          "case's Vmin/Vmax; with --write-stressed, also write it into the variant")
+    ap.add_argument("--agc", action="store_true",
+                    help="share the load change among online non-slack units in proportion to "
+                         "Pmax (AGC-style) instead of leaving it all to the slack unit")
     args = ap.parse_args(argv)
 
     case, ctgc = Path(args.case), Path(args.ctgc)
@@ -260,7 +362,7 @@ def main(argv: list[str] | None = None) -> int:
         vband = (lo, hi)
 
     if args.write_stressed is not None:
-        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband)
+        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband, args.agc)
         print(f"Wrote stressed variant: {out}\nPoint the spec's pflow (and/or scopflow) case entry at it.")
         return 0
 
@@ -276,7 +378,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Pre-check {case} (contingencies: {ctgc}) at scales {scales}\n")
     if vband:
         print(f"Voltage band for violation checks: {vband[0]}-{vband[1]} pu (overrides case limits)\n")
-    results = run_scan(cfg, case, ctgc, scales, apps, vband)
+    results = run_scan(cfg, case, ctgc, scales, apps, vband, args.agc)
     verdicts = classify(results) if {"opflow", "pflow", "scopflow"} <= set(apps) else {}
 
     print("\nVerdicts")

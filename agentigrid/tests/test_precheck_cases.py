@@ -5,6 +5,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("precheck_cases", ROOT / "rag" / "tools" / "precheck_cases.py")
 pc = importlib.util.module_from_spec(spec)
@@ -99,3 +101,56 @@ def test_marginal_scopflow_is_undetermined():
     proven = {"parsed": True, "converged": False, "feasibility": "infeasible", "num_violations": 0}
     r = {1.0: {"opflow": _rec(), "scopflow": proven, "pflow": _rec()}}
     assert pc.classify(r)["n1"]["meaningful_at_base"] is True
+
+
+# --- physical operating point: slack limits and AGC redispatch -------------
+
+G200 = ROOT.parent / "datafiles" / "case_ACTIVSg200.m"
+needs_200 = pytest.mark.skipif(not G200.exists(), reason="ExaGO datafiles not present")
+
+
+@needs_200
+def test_slack_check_flags_unphysical_scales():
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    base = parse_matpower(G200)
+    assert pc.slack_check(pc.stressed_network(base, 0.9), base)["within_limits"] is True
+    for f in (0.7, 1.3):   # slack would go below Pmin / above Pmax
+        assert pc.slack_check(pc.stressed_network(base, f), base)["within_limits"] is False
+
+
+@needs_200
+@pytest.mark.parametrize("factor", [0.7, 1.3, 1.5])
+def test_agc_redispatch_balances_within_limits(factor):
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    base = parse_matpower(G200)
+    net = pc.stressed_network(base, factor, agc=True)
+    d_load = sum(b.Pd for b in net.buses) - sum(b.Pd for b in base.buses)
+    d_gen = sum(g.Pg for g in net.generators) - sum(g.Pg for g in base.generators)
+    assert abs(d_load - d_gen) < 1e-6 * abs(d_load)
+    fuels = pc._gen_fuels(net)
+    ref = {b.bus_i for b in net.buses if b.type == 3}
+    for g0, g, f in zip(base.generators, net.generators, fuels):
+        if g.status != 1:
+            assert g.Pg == g0.Pg                       # offline units untouched
+        elif g.bus in ref:
+            assert g.Pg == g0.Pg                       # slack only covers losses
+        elif f in pc.RENEWABLE_FUELS:
+            assert -1e-9 <= g.Pg <= g0.Pg + 1e-9       # curtail only, never above forecast
+        else:
+            assert g.Pmin - 1e-9 <= g.Pg <= g.Pmax + 1e-9
+    assert pc.stressed_network(base, 1.0, agc=True).generators[0].Pg == base.generators[0].Pg
+
+
+def test_agc_raises_when_fleet_cannot_absorb(tmp_path):
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    base = parse_matpower(ROOT.parent / "datafiles" / "case9" / "case9mod.m")
+    with pytest.raises(ValueError):
+        pc.agc_redispatch(base, 1e6)
+
+
+def test_unphysical_slack_makes_pflow_goal_unusable():
+    r = {"opflow": _rec(), "scopflow": _rec(), "pflow": _rec(feasible=False, therm=3),
+         "_slack_check": {"within_limits": False}}
+    assert pc.check_goal("relieve", r) is False
+    r["_slack_check"] = {"within_limits": True}
+    assert pc.check_goal("relieve", r) is True
