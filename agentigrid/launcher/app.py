@@ -257,10 +257,40 @@ def render_sidebar() -> dict:
                     "Corrective withholds context on low confidence, so on a thin or "
                     "uncalibrated corpus it may behave like the baseline — that is expected."
                 )
+                # Relevance grader (corrective only). Jev is selectable only when it
+                # is actually usable (SDK wired + TYPESAFE_API_KEY set); until then the
+                # selector is disabled with Cosine preselected, so a run can never
+                # claim a grader that didn't run.
+                try:
+                    from agentigrid.rag.grader_jev import jev_available
+                    _jev_ok = jev_available()
+                except Exception:
+                    _jev_ok = False
+                crag_grader = st.radio(
+                    "Relevance grader",
+                    options=["cosine", "jev"],
+                    index=0,
+                    format_func=lambda g: {
+                        "cosine": "Cosine (deterministic)",
+                        "jev": "Jev (calibrated, experimental)" if _jev_ok
+                               else "Jev (calibrated, not implemented yet)",
+                    }[g],
+                    horizontal=True,
+                    disabled=disabled or not _jev_ok,
+                    help=(
+                        "How Corrective RAG grades retrieved chunks. Cosine is the "
+                        "reproducible default. Jev (TypeSafe) returns calibrated "
+                        "relevance probabilities; it becomes selectable once its SDK "
+                        "is wired in rag/grader_jev.py and TYPESAFE_API_KEY is set."
+                    ),
+                )
+            else:
+                crag_grader = "cosine"
         # AGENTIGRID_RAG_MODE is the mode axis; keep the legacy AGENTIGRID_RAG flag
         # in sync so the existing grounding indicator (which checks it) still works.
         os.environ["AGENTIGRID_RAG_MODE"] = rag_mode
         os.environ["AGENTIGRID_RAG"] = "0" if rag_mode == "off" else "1"
+        os.environ["AGENTIGRID_CRAG_GRADER"] = crag_grader
 
         # ── Search Parameters ────────────────────────────────────────────
         st.header("⚙️ Search Parameters")

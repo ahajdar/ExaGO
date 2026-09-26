@@ -35,6 +35,7 @@ Or via env, if you extend build_retriever() (see the snippet at the bottom).
 from __future__ import annotations
 
 import os
+from functools import lru_cache
 from typing import Sequence
 
 # Same shape the retriever/corrective modules use.
@@ -94,7 +95,9 @@ class JevGrader:
         return [max(0.0, min(1.0, float(x))) for x in scores]
 
     def describe(self) -> dict:
-        return {"grader": "jev", "model": self._model, "available": self.available}
+        # Report what actually runs: if Jev isn't usable, scores are cosine.
+        name = "jev" if self.available else "jev (fallback: cosine)"
+        return {"grader": name, "model": self._model, "available": self.available}
 
     # ------------------------------------------------------------------
     # The ONLY vendor boundary. Wire these two to the real TypeSafe SDK.
@@ -124,6 +127,19 @@ class JevGrader:
         it's cheaper/faster than per-doc calls.
         """
         raise NotImplementedError("Wire JevGrader._score_relevance to Jev's Noul primitive.")
+
+
+@lru_cache(maxsize=1)
+def jev_available() -> bool:
+    """True only when Jev is actually usable (SDK wired + TYPESAFE_API_KEY set).
+
+    Used by the UI to enable/disable the grader selector. Cached for the life of
+    the process — restart Streamlit after adding the key or wiring the SDK.
+    """
+    try:
+        return JevGrader().available
+    except Exception:
+        return False
 
 
 # ----------------------------------------------------------------------
