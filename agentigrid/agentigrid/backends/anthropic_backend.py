@@ -40,6 +40,26 @@ class AnthropicBackend(LLMBackend):
         """Return the backend name."""
         return "anthropic"
 
+    def _system_param(self, system_prompt: str):
+        """System prompt in the form the Messages API expects.
+
+        With ``prompt_cache`` on, the system prompt is sent as a single text block
+        carrying an ephemeral ``cache_control`` breakpoint. AgentiGrid builds the
+        system prompt once per session, so every later iteration reads it from the
+        cache instead of paying the full input price again. This affects billing
+        only; the model sees identical text either way. Prompts below the model's
+        minimum cacheable length are silently processed uncached by the API.
+        """
+        if not getattr(self._config, "prompt_cache", False):
+            return system_prompt
+        return [
+            {
+                "type": "text",
+                "text": system_prompt,
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
     def supports_json_mode(self) -> bool:
         """Anthropic does not have a native JSON output mode."""
         return False
@@ -58,7 +78,7 @@ class AnthropicBackend(LLMBackend):
                 model=self._config.model,
                 max_tokens=self._config.max_tokens,
                 temperature=temp,
-                system=system_prompt,
+                system=self._system_param(system_prompt),
                 messages=[{"role": "user", "content": user_prompt}],
             )
 
@@ -67,7 +87,9 @@ class AnthropicBackend(LLMBackend):
                 if block.type == "text":
                     raw_text += block.text
 
-            prompt_tokens = getattr(response.usage, "input_tokens", None)
+            prompt_tokens, cache_creation, cache_read = _input_token_breakdown(
+                response.usage
+            )
             completion_tokens = getattr(response.usage, "output_tokens", None)
 
             json_data, json_error = extract_json(raw_text)
@@ -80,6 +102,8 @@ class AnthropicBackend(LLMBackend):
                 backend=self.name(),
                 prompt_tokens=prompt_tokens,
                 completion_tokens=completion_tokens,
+                cache_creation_tokens=cache_creation,
+                cache_read_tokens=cache_read,
             )
 
         except Exception as exc:
@@ -94,3 +118,21 @@ class AnthropicBackend(LLMBackend):
                 prompt_tokens=None,
                 completion_tokens=None,
             )
+
+
+def _input_token_breakdown(usage) -> tuple[Optional[int], Optional[int], Optional[int]]:
+    """Return (total_input, cache_creation, cache_read) from an API usage object.
+
+    With caching, the API's ``input_tokens`` counts only tokens after the last
+    cache breakpoint. The total input is ``input_tokens + cache_creation_input_tokens
+    + cache_read_input_tokens``; returning that total keeps ``prompt_tokens``
+    comparable with runs made before caching was enabled.
+    """
+    base = getattr(usage, "input_tokens", None)
+    creation = getattr(usage, "cache_creation_input_tokens", None)
+    read = getattr(usage, "cache_read_input_tokens", None)
+    creation = creation if isinstance(creation, int) else None
+    read = read if isinstance(read, int) else None
+    if not isinstance(base, int):
+        return None, creation, read
+    return base + (creation or 0) + (read or 0), creation, read

@@ -18,7 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, Optional
 
-from agentigrid.backends import create_backend
+from agentigrid.backends import UsageMeter, create_backend
 from agentigrid.backends.base import LLMBackend, LLMResponse
 from agentigrid.config import AppConfig
 from agentigrid.engine.commands import parse_command
@@ -766,7 +766,9 @@ class AgentLoopController:
         on_explore: Callable[[int, list[dict]], None] | None = None,
     ) -> None:
         self._config = config
-        self._backend: LLMBackend = create_backend(config.llm)
+        # Metered so per-run token totals (incl. prompt-cache reads/writes)
+        # cover every LLM call, not only the main per-iteration call.
+        self._backend: LLMBackend = UsageMeter(create_backend(config.llm))
         # Mode-aware: AGENTIGRID_RAG_MODE ∈ {off, basic, corrective}; the legacy
         # AGENTIGRID_RAG=1/0 switch still maps to basic/off. All modes expose the
         # same .enabled / .retrieve() surface, so nothing else here changes.
@@ -4766,6 +4768,14 @@ class AgentLoopController:
         _rag_enabled = self._retriever.enabled
         self._journal.rag_enabled = _rag_enabled
         session.rag_enabled = _rag_enabled
+        _totals = getattr(self._backend, "totals", None)
+        if callable(_totals):
+            self._journal.llm_usage = {
+                **_totals(),
+                "backend": self._backend.name(),
+                "model": self._config.llm.model,
+                "prompt_cache": bool(getattr(self._config.llm, "prompt_cache", False)),
+            }
         
         total_tokens = self._total_prompt_tokens + self._total_completion_tokens
 

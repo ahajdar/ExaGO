@@ -42,6 +42,7 @@ DEFAULTS: dict[str, Any] = {
         "ollama_cloud_host": None,
         "temperature": 0.3,
         "max_tokens": 4096,
+        "prompt_cache": True,
     },
     "search": {
         "max_iterations": 20,
@@ -132,6 +133,9 @@ class LLMConfig:
     ollama_cloud_host: Optional[str]
     temperature: float
     max_tokens: int
+    # Anthropic prompt caching of the (per-session constant) system prompt.
+    # Billing-only: does not change model outputs. Ignored by other backends.
+    prompt_cache: bool = True
 
 
 @dataclass(frozen=True)

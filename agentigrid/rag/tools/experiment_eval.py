@@ -127,7 +127,26 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         "rag_enabled": (journal.get("rag_enabled")
                         if isinstance(journal, dict) and "rag_enabled" in journal
                         else manifest.get("condition_env", {}).get("AGENTIGRID_RAG")),
+        **usage_metrics(journal),
     }
+
+
+USAGE_KEYS = ("calls", "prompt_tokens", "completion_tokens",
+              "cache_creation_tokens", "cache_read_tokens")
+
+
+def usage_metrics(journal: dict) -> dict:
+    """Token usage over ALL LLM calls of the run (journal ``llm_usage``).
+
+    ``llm_prompt_tokens`` is the total input (uncached + cache writes + cache
+    reads). Cost in USD is deliberately NOT computed here: prices change, so it
+    is derived offline from these counts and the rates in effect at run time.
+    Journals written before usage metering carry no ``llm_usage`` -> None.
+    """
+    u = journal.get("llm_usage") if isinstance(journal, dict) else None
+    if not isinstance(u, dict):
+        return {f"llm_{k}": None for k in USAGE_KEYS}
+    return {f"llm_{k}": u.get(k) for k in USAGE_KEYS}
 
 
 def collect_runs(runs_dir: Path):
@@ -177,6 +196,8 @@ def collect_journals(pattern: str):
 
 
 NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "solve_elapsed_s",
+           "llm_prompt_tokens", "llm_completion_tokens",
+           "llm_cache_creation_tokens", "llm_cache_read_tokens",
            "n_solve_iters", "wall_s"]
 RATE = ["any_feasible", "goal_attained"]  # averaged as proportions
 
