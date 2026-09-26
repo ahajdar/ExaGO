@@ -9,6 +9,7 @@
     "voltage: light-load overvoltage with the ANSI C84.1 Range A band (0.95-1.05 pu) written into the case; x0.9 keeps the slack inside its limits (~237 MW), PFLOW shows 6 voltage violations and OPFLOW is feasible with the band (cost 26554.63). relieve: pending an --agc re-scan (the x1.3 plain-scaled point was not physical).",
     "Frozen variants live in rag/tools/specs/cases/ (data/ is git-ignored); written by precheck_cases.py --write-stressed with the fixed MATPOWER writer. The x1.5 SCOPFLOW variant is plain-scaled: OPFLOW/SCOPFLOW re-dispatch, so file set-points are only the initial point. N-1 uses the ExaGO-shipped contingency file with all contingencies (AgentiGrid passes -scopflow_Nc -1); keep exago.mpi_np = 1 (mpi_np > 1 selects EMPAR, which the evaluator rejects).",
     "Goal attainment: cost10 by target_pct; n1cost10 by n1_secure (feasible SCOPFLOW solve with -ctgcfile, -scopflow_Nc -1 and a coupled solver) AND target_pct on the same entry; relieve/voltage by no_violations; loadmax has no attainment predicate. Cost targets are guarded: a reduction does not count when total load is below baseline (0.1% tolerance) or a set_cost_coeffs command is in effect; cost_improvement_pct obeys the same guard and cost_guard_rejections counts rejected entries. A cell whose baseline already attains its goal (baseline_attained=1) measures nothing and must be fixed before analysis.",
+    "Cost goals state the guard in the goal text (same wording in every condition), so a guard rejection is an instruction violation and is reported per condition (cost_guard_rejections). Primary metric for cost goals: guarded cost_improvement_pct (continuous; robust to a floor effect if few runs reach 10%); goal_attained at the 10% target is secondary.",
     "Run from the agentigrid project root with the venv active and OLLAMA_HOST set."
   ],
   "agentigrid_cmd": "agentigrid",
@@ -27,9 +28,9 @@
     {"name": "ACTIVSg200x0.9-v0.95-pflow", "network": "ACTIVSg200", "path": "./rag/tools/specs/cases/case_ACTIVSg200_load0.9_v0.95-1.05.m", "app": "pflow", "goals": ["voltage"]}
   ],
   "goals": [
-    {"id": "cost10", "text": "Reduce total generation cost by 10%", "target_pct": 10},
+    {"id": "cost10", "text": "Reduce total generation cost by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "target_pct": 10},
     {"id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible"},
-    {"id": "n1cost10", "text": "Reduce the total generation cost of the N-1-secure dispatch (secure against all contingencies) by 10%", "success": "n1_secure", "target_pct": 10},
+    {"id": "n1cost10", "text": "Reduce the total generation cost of the N-1-secure dispatch (secure against all contingencies) by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "success": "n1_secure", "target_pct": 10},
     {"id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits", "success": "no_violations"},
     {"id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings", "success": "no_violations"}
   ],
