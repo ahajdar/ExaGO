@@ -98,6 +98,10 @@ class CorrectiveRetriever:
         # Provide a callable (query, hits) -> [score per hit in 0..1]; it replaces
         # the cosine scores in _grade(). Everything else stays identical.
         self._grader = grader
+        # Per-session telemetry (journaled via describe() as rag_config): lets the
+        # analysis see what corrective retrieval actually did in each run.
+        self.stats = {"calls": 0, "correct": 0, "ambiguous": 0, "incorrect": 0,
+                      "rewrites": 0, "withheld": 0, "grader_fallbacks": 0}
 
     def describe(self) -> dict:
         """Effective configuration for this run (shown in the UI / logged)."""
@@ -110,7 +114,18 @@ class CorrectiveRetriever:
             "tau_upper": self.tau_upper,
             "strip_min_score": self.strip_min_score,
             "grader": self._grader_name(),
+            "grader_detail": self._grader_detail(),
+            "stats": dict(self.stats),
         }
+
+    def _grader_detail(self) -> Optional[dict]:
+        describe = getattr(self._grader, "describe", None)
+        if callable(describe):
+            try:
+                return describe()
+            except Exception:
+                return None
+        return None
 
     def _grader_name(self) -> str:
         """Name of the active grader: 'cosine' when none is injected, otherwise
@@ -131,16 +146,21 @@ class CorrectiveRetriever:
             try:
                 return list(self._grader(query, hits))
             except Exception:
-                pass  # any grader failure -> fall back to the cosine scores
+                # any grader failure -> fall back to the cosine scores, COUNTED so
+                # the run is visibly not a clean run of the requested grader
+                self.stats["grader_fallbacks"] += 1
         return [s for (_d, _m, s) in hits]
 
     def _grade(self, scores: list[float]) -> str:
         top = max(scores) if scores else 0.0
         if top >= self.tau_upper:
-            return CORRECT
-        if top < self.tau_lower:
-            return INCORRECT
-        return AMBIGUOUS
+            verdict = CORRECT
+        elif top < self.tau_lower:
+            verdict = INCORRECT
+        else:
+            verdict = AMBIGUOUS
+        self.stats[verdict] += 1
+        return verdict
 
     # -- refinement (decompose-recompose) ------------------------------
     def _refine(self, query: str, hits: list[Hit]) -> list[tuple[str, float]]:
@@ -196,6 +216,7 @@ class CorrectiveRetriever:
         """Return a CRAG-refined context block, or "" to fall back to baseline."""
         if not self.enabled or not query:
             return ""
+        self.stats["calls"] += 1
         try:
             hits = self._base.query_hits(query, k or self.k)
         except Exception:
@@ -205,13 +226,16 @@ class CorrectiveRetriever:
         if verdict == INCORRECT:
             rq = self._reformulate(query)
             if rq == query:
+                self.stats["withheld"] += 1
                 return ""  # nothing to correct with -> withhold context
+            self.stats["rewrites"] += 1
             try:
                 hits2 = self._base.query_hits(rq, k or self.k)
             except Exception:
                 hits2 = []
             verdict2 = self._grade(self._scores(rq, hits2)) if hits2 else INCORRECT
             if verdict2 == INCORRECT:
+                self.stats["withheld"] += 1
                 return ""  # still weak -> withhold rather than mislead
             hits, verdict, query = hits2, verdict2, rq
 

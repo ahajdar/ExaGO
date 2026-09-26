@@ -1084,6 +1084,8 @@ class SearchJournal:
             data["rag_enabled"] = self.rag_enabled
         if getattr(self, "llm_usage", None) is not None:
             data["llm_usage"] = self.llm_usage
+        if getattr(self, "rag_config", None) is not None:
+            data["rag_config"] = self.rag_config
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         logger.info("Journal exported to %s (%d entries)", path, len(self._entries))
 

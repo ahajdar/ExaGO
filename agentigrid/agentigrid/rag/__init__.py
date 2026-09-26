@@ -11,6 +11,10 @@ For backward compatibility the legacy switch still works:
     AGENTIGRID_RAG=1  ->  basic
     AGENTIGRID_RAG=0/unset (and no _MODE) -> off
 
+Corrective-mode grader (AGENTIGRID_CRAG_GRADER): cosine (default) | reranker
+(local cross-encoder, needs sentence-transformers) | jev (stub). Thresholds:
+AGENTIGRID_CRAG_TAU_LOWER / AGENTIGRID_CRAG_TAU_UPPER.
+
 Use `build_retriever(**kwargs)` to get the retriever for the active mode; every
 mode exposes the same surface (`.enabled` and `.retrieve(query) -> str`).
 """
@@ -24,7 +28,7 @@ from .corrective import CorrectiveRetriever
 VALID_MODES = ("off", "basic", "corrective")
 # Graders implemented behind the corrective-RAG seam. "jev" is usable only when
 # jev_available() is true; otherwise it falls back to cosine at run time.
-VALID_CRAG_GRADERS = ("cosine", "jev")
+VALID_CRAG_GRADERS = ("cosine", "reranker", "jev")
 
 
 def resolve_rag_mode() -> str:
@@ -54,6 +58,9 @@ def _make_crag_grader():
     module is imported lazily so its SDK is only needed when actually requested.
     """
     name = resolve_crag_grader()
+    if name == "reranker":
+        from .grader_reranker import RerankerGrader
+        return RerankerGrader()  # loads lazily; failures are counted, not hidden
     if name == "jev":
         try:
             from .grader_jev import JevGrader
@@ -61,6 +68,23 @@ def _make_crag_grader():
         except Exception:
             return None  # degrade to cosine
     return None  # 'cosine' (and any unknown value already normalized)
+
+
+def _tau_overrides() -> dict:
+    """Corrective thresholds from AGENTIGRID_CRAG_TAU_LOWER / _UPPER, if set.
+
+    Each grader's score scale differs (cosine vs. reranker score vs. calibrated
+    probability), so its thresholds are fixed on labeled data and passed per
+    experiment condition; unset = the module defaults (0.30 / 0.50, cosine).
+    """
+    out = {}
+    for env, key in (("AGENTIGRID_CRAG_TAU_LOWER", "tau_lower"), ("AGENTIGRID_CRAG_TAU_UPPER", "tau_upper")):
+        val = os.environ.get(env)
+        if val not in (None, ""):
+            out[key] = float(val)
+    if "tau_lower" in out and "tau_upper" in out and out["tau_lower"] > out["tau_upper"]:
+        raise ValueError("AGENTIGRID_CRAG_TAU_LOWER must not exceed AGENTIGRID_CRAG_TAU_UPPER")
+    return out
 
 
 def build_retriever(**base_kwargs):
@@ -76,7 +100,7 @@ def build_retriever(**base_kwargs):
         return Retriever(enabled=False)
     base = Retriever(enabled=True, **base_kwargs)
     if mode == "corrective":
-        return CorrectiveRetriever(base, grader=_make_crag_grader())
+        return CorrectiveRetriever(base, grader=_make_crag_grader(), **_tau_overrides())
     return base  # 'basic' (and any unknown value already normalized to basic)
 
 

@@ -52,7 +52,6 @@ def test_case_extra_args_precede_model_args():
     ({"AGENTIGRID_RAG_MODE": "basic"}, True),
     ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine"}, True),
     ({"AGENTIGRID_RAG_MODE": "graph"}, False),
-    ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}, False),
     ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated"}, False),
     ({"AGENTIGRID_RAG": "1"}, True),  # legacy switch, no mode/grader keys
 ])
@@ -122,3 +121,12 @@ def test_repo_spec_is_consistent():
     assert [c["id"].split("-")[0] for c in spec["conditions"]] == ["C0", "C1", "C2a", "C2b", "C2c", "C3"]
     scopf = [c for c in spec["cases"] if c["app"] == "scopflow"]
     assert scopf and all("--ctgc" in c["extra_args"] for c in scopf)
+
+
+def test_reranker_gated_on_library(monkeypatch):
+    import agentigrid.rag.grader_reranker as gr
+    cond = {"id": "c", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}}
+    monkeypatch.setattr(gr, "reranker_available", lambda: False)
+    assert "sentence-transformers" in runner.unimplemented_reason(cond)
+    monkeypatch.setattr(gr, "reranker_available", lambda: True)
+    assert runner.unimplemented_reason(cond) is None

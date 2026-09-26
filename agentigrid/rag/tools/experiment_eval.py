@@ -234,6 +234,29 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
                         if isinstance(journal, dict) and "rag_enabled" in journal
                         else manifest.get("condition_env", {}).get("AGENTIGRID_RAG")),
         **usage_metrics(journal),
+        **rag_metrics(journal),
+    }
+
+
+def rag_metrics(journal: dict) -> dict:
+    """What retrieval actually did in the run (journal ``rag_config``).
+
+    ``rag_grader_fallbacks`` > 0 means the requested grader failed at least once
+    and cosine scores were used instead; such runs are not clean runs of that
+    condition and should be excluded or reported.
+    """
+    rc = journal.get("rag_config") if isinstance(journal, dict) else None
+    if not isinstance(rc, dict):
+        return {"rag_mode": None, "rag_grader": None, "rag_grader_fallbacks": None,
+                "crag_correct": None, "crag_ambiguous": None, "crag_incorrect": None,
+                "crag_withheld": None}
+    st = rc.get("stats") or {}
+    return {
+        "rag_mode": rc.get("mode_env") or rc.get("mode"),
+        "rag_grader": rc.get("grader"),
+        "rag_grader_fallbacks": st.get("grader_fallbacks"),
+        "crag_correct": st.get("correct"), "crag_ambiguous": st.get("ambiguous"),
+        "crag_incorrect": st.get("incorrect"), "crag_withheld": st.get("withheld"),
     }
 
 

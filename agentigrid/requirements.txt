@@ -6,3 +6,6 @@ pandas>=2.0,<3
 pytest>=7.0,<9
 plotly>=6.8
 reportlab>=5.0
+
+# Optional: local cross-encoder grader for Corrective RAG (condition C2b)
+# sentence-transformers>=3

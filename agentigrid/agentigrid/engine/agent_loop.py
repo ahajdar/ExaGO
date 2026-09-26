@@ -4768,6 +4768,16 @@ class AgentLoopController:
         """Print summary and save journal."""
         _rag_enabled = self._retriever.enabled
         self._journal.rag_enabled = _rag_enabled
+        try:
+            from agentigrid.rag import resolve_rag_mode, resolve_crag_grader
+            _desc = getattr(self._retriever, "describe", None)
+            self._journal.rag_config = {
+                **(_desc() if callable(_desc) else {}),
+                "mode_env": resolve_rag_mode(),
+                "grader_env": resolve_crag_grader(),
+            }
+        except Exception:
+            self._journal.rag_config = None
         session.rag_enabled = _rag_enabled
         _totals = getattr(self._backend, "totals", None)
         if callable(_totals):

@@ -118,6 +118,11 @@ def unimplemented_reason(cond):
         g = str(grader).strip().lower()
         if g not in VALID_CRAG_GRADERS:
             return f"AGENTIGRID_CRAG_GRADER={grader!r} not implemented (valid: {', '.join(VALID_CRAG_GRADERS)})"
+        if g == "reranker":
+            from agentigrid.rag.grader_reranker import reranker_available
+            if not reranker_available():
+                return ("AGENTIGRID_CRAG_GRADER='reranker' needs sentence-transformers "
+                        "(pip install sentence-transformers)")
         if g == "jev":
             try:
                 from agentigrid.rag.grader_jev import jev_available

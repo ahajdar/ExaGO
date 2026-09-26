@@ -1,7 +1,7 @@
 {
   "notes": [
     "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b/c, C3.",
-    "C2b (reranker), C2c (reranker_calibrated) and C3 (graph) are not implemented yet; the runner refuses them unless --skip-unimplemented is passed, so no run is mislabeled.",
+    "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only). C2c (reranker_calibrated) and C3 (graph) are not implemented yet; the runner refuses them unless --skip-unimplemented is passed.",
     "C2c is gated: run it only if C2b beats C2a (paper H4).",
     "case39 carries the economic goals only (no contingency file ships with ExaGO for case39).",
     "ACTIVSg200 files are read from ../datafiles (the ExaGO distribution); N-1 uses its shipped contingency file with all contingencies (AgentiGrid passes -scopflow_Nc -1).",
