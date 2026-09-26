@@ -166,6 +166,8 @@ def collect_runs(runs_dir: Path):
         row = {
             "run_id": manifest.get("run_id"),
             "case": manifest.get("case"),
+            "network": manifest.get("network", manifest.get("case")),
+            "app": manifest.get("app"),
             "goal": manifest.get("goal_id"),
             "condition": manifest.get("condition"),
             "backend": manifest.get("backend"),

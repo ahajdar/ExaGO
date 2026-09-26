@@ -1,0 +1,124 @@
+"""Experiment runner: goal allowlists, per-case args, and the guard that refuses
+conditions whose RAG mode / grader is not implemented (which AgentiGrid would
+otherwise silently degrade to basic / cosine, mislabeling the data)."""
+
+from __future__ import annotations
+
+import importlib.util
+import json
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def _load_runner():
+    path = ROOT / "rag" / "tools" / "experiment_runner.py"
+    spec = importlib.util.spec_from_file_location("experiment_runner", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+runner = _load_runner()
+
+SPEC = {
+    "goals": [{"id": "cost10", "text": "c"}, {"id": "loadmax", "text": "l"}, {"id": "n1", "text": "n"}],
+    "max_iter": 4,
+}
+
+
+def test_goals_for_case_allowlist_and_default():
+    assert [g["id"] for g in runner.goals_for_case(SPEC, {"name": "a", "goals": ["n1"]})] == ["n1"]
+    assert [g["id"] for g in runner.goals_for_case(SPEC, {"name": "b"})] == ["cost10", "loadmax", "n1"]
+
+
+def test_goals_for_case_rejects_unknown_goal():
+    with pytest.raises(SystemExit):
+        runner.goals_for_case(SPEC, {"name": "a", "goals": ["nope"]})
+
+
+def test_case_extra_args_precede_model_args():
+    case = {"name": "x", "path": "net.m", "app": "scopflow", "extra_args": ["--ctgc", "f.cont"]}
+    model = {"backend": "ollama", "model": "m", "extra_args": ["--quiet"]}
+    cmd = runner.build_cmd(SPEC, case, {"id": "n1", "text": "n"}, model)
+    assert cmd[-3:] == ["--ctgc", "f.cont", "--quiet"]
+    assert "--app" in cmd and cmd[cmd.index("--app") + 1] == "scopflow"
+
+
+@pytest.mark.parametrize("env, ok", [
+    ({"AGENTIGRID_RAG_MODE": "off"}, True),
+    ({"AGENTIGRID_RAG_MODE": "basic"}, True),
+    ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine"}, True),
+    ({"AGENTIGRID_RAG_MODE": "graph"}, False),
+    ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}, False),
+    ({"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated"}, False),
+    ({"AGENTIGRID_RAG": "1"}, True),  # legacy switch, no mode/grader keys
+])
+def test_unimplemented_reason(env, ok):
+    reason = runner.unimplemented_reason({"id": "c", "env": env})
+    assert (reason is None) == ok, reason
+
+
+def test_jev_blocked_when_unavailable(monkeypatch):
+    import agentigrid.rag.grader_jev as gj
+    monkeypatch.setattr(gj, "jev_available", lambda: False)
+    reason = runner.unimplemented_reason(
+        {"id": "c", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "jev"}})
+    assert reason and "silently run cosine" in reason
+
+
+def _run_main(monkeypatch, tmp_path, argv):
+    monkeypatch.setattr("sys.argv", ["experiment_runner.py", *argv])
+    monkeypatch.chdir(tmp_path)
+    return runner.main()
+
+
+def _write_spec(tmp_path, conditions):
+    spec = {
+        "project_root": str(tmp_path), "workdir": "workdir", "out_dir": "out", "reps": 2,
+        "cases": [
+            {"name": "c39", "path": "a.m", "app": "opflow", "goals": ["cost10", "loadmax"]},
+            {"name": "g200-scopf", "path": "b.m", "app": "scopflow",
+             "extra_args": ["--ctgc", "b.cont"], "goals": ["n1"]},
+        ],
+        "goals": SPEC["goals"],
+        "conditions": conditions,
+        "models": [{"backend": "ollama", "model": "m", "extra_args": []}],
+    }
+    p = tmp_path / "spec.json"
+    p.write_text(json.dumps(spec))
+    return p
+
+
+def test_main_refuses_unimplemented_conditions(monkeypatch, tmp_path, capsys):
+    p = _write_spec(tmp_path, [{"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}},
+                               {"id": "C3", "env": {"AGENTIGRID_RAG_MODE": "graph"}}])
+    rc = _run_main(monkeypatch, tmp_path, ["--spec", str(p)])
+    assert rc == 2
+    assert "Refusing to start" in capsys.readouterr().out
+    assert not (tmp_path / "out" / "runs_index.jsonl").exists()
+
+
+def test_dry_run_skips_unimplemented_and_counts_allowlisted_goals(monkeypatch, tmp_path, capsys):
+    p = _write_spec(tmp_path, [{"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}},
+                               {"id": "C3", "env": {"AGENTIGRID_RAG_MODE": "graph"}}])
+    rc = _run_main(monkeypatch, tmp_path, ["--spec", str(p), "--dry-run"])
+    out = capsys.readouterr().out
+    assert rc == 0
+    # (2 goals on c39 + 1 goal on g200) x 1 implemented condition x 1 model x 2 reps
+    assert "6 runs" in out
+    assert "C3" in out and "not implemented" in out
+    assert "--ctgc b.cont" in out
+
+
+def test_repo_spec_is_consistent():
+    spec = json.loads((ROOT / "grader_ablation_spec.json").read_text())
+    ids = {g["id"] for g in spec["goals"]}
+    for case in spec["cases"]:
+        assert set(case.get("goals", ids)) <= ids
+    assert spec["reps"] == 20
+    assert [c["id"].split("-")[0] for c in spec["conditions"]] == ["C0", "C1", "C2a", "C2b", "C2c", "C3"]
+    scopf = [c for c in spec["cases"] if c["app"] == "scopflow"]
+    assert scopf and all("--ctgc" in c["extra_args"] for c in scopf)

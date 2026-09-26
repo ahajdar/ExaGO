@@ -80,8 +80,52 @@ def build_cmd(spec, case, goal, model):
     if case.get("app"):
         cmd += ["--app", case["app"]]
     cmd += ["--max-iter", str(spec.get("max_iter", 4))]
+    cmd += list(case.get("extra_args", []))   # e.g. ["--ctgc", "<file>"] for SCOPFLOW
     cmd += list(model.get("extra_args", []))
     return cmd
+
+
+def goals_for_case(spec, case):
+    """Goals to run on `case`: its optional `goals` allowlist, else all goals."""
+    allow = case.get("goals")
+    if allow is None:
+        return list(spec["goals"])
+    known = {g["id"] for g in spec["goals"]}
+    missing = [g for g in allow if g not in known]
+    if missing:
+        raise SystemExit(f"case {case['name']!r} lists unknown goal ids: {missing}")
+    return [g for g in spec["goals"] if g["id"] in allow]
+
+
+def unimplemented_reason(cond):
+    """Why a condition cannot run as labeled, or None if it can.
+
+    AgentiGrid degrades unknown RAG modes to 'basic' and unknown / unavailable
+    graders to 'cosine' so interactive runs never break. In an experiment that
+    silent fallback would mislabel data (a 'reranker' condition would really be
+    cosine), so the runner refuses such conditions up front.
+    """
+    env = cond.get("env", {})
+    try:
+        from agentigrid.rag import VALID_MODES, VALID_CRAG_GRADERS
+    except Exception as exc:  # package not importable -> cannot verify
+        return f"cannot import agentigrid.rag to verify ({exc})"
+    mode = env.get("AGENTIGRID_RAG_MODE")
+    if mode is not None and str(mode).strip().lower() not in VALID_MODES:
+        return f"AGENTIGRID_RAG_MODE={mode!r} not implemented (valid: {', '.join(VALID_MODES)})"
+    grader = env.get("AGENTIGRID_CRAG_GRADER")
+    if grader is not None:
+        g = str(grader).strip().lower()
+        if g not in VALID_CRAG_GRADERS:
+            return f"AGENTIGRID_CRAG_GRADER={grader!r} not implemented (valid: {', '.join(VALID_CRAG_GRADERS)})"
+        if g == "jev":
+            try:
+                from agentigrid.rag.grader_jev import jev_available
+                if not jev_available():
+                    return "AGENTIGRID_CRAG_GRADER='jev' is not available (would silently run cosine)"
+            except Exception as exc:
+                return f"cannot verify Jev availability ({exc})"
+    return None
 
 
 def newest_new_journal(workdir: Path, before: set[str]) -> Path | None:
@@ -116,7 +160,8 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
 
     manifest = {
         "run_id": run_id,
-        "case": case["name"], "case_path": case["path"], "app": case.get("app"),
+        "case": case["name"], "network": case.get("network", case["name"]),
+        "case_path": case["path"], "app": case.get("app"),
         "goal_id": goal["id"], "goal_text": goal["text"], "target_pct": goal.get("target_pct"),
         "condition": cond["id"], "condition_env": cond.get("env", {}),
         "backend": model["backend"], "model": model["model"],
@@ -170,6 +215,9 @@ def main() -> int:
     ap.add_argument("--spec", help="experiment spec JSON")
     ap.add_argument("--init-spec", metavar="PATH", help="write an example spec and exit")
     ap.add_argument("--dry-run", action="store_true", help="print commands, execute nothing")
+    ap.add_argument("--skip-unimplemented", action="store_true",
+                    help="drop conditions whose RAG mode / grader is not implemented yet "
+                         "(default: refuse to start, so no run is mislabeled)")
     args = ap.parse_args()
 
     if args.init_spec:
@@ -181,6 +229,20 @@ def main() -> int:
 
     spec = json.loads(Path(args.spec).read_text())
     project_root = Path(spec.get("project_root", ".")).resolve()
+    conditions = list(spec["conditions"])
+    blocked = [(c["id"], r) for c in conditions if (r := unimplemented_reason(c))]
+    if blocked:
+        print("Conditions not implemented yet:")
+        for cid, why in blocked:
+            print(f"  - {cid}: {why}")
+        if not (args.skip_unimplemented or args.dry_run):
+            print("Refusing to start: these runs would be mislabeled. "
+                  "Implement them, remove them from the spec, or pass --skip-unimplemented.")
+            return 2
+        blocked_ids = {cid for cid, _ in blocked}
+        conditions = [c for c in conditions if c["id"] not in blocked_ids]
+        print(f"Skipping {len(blocked_ids)} condition(s); running {len(conditions)}.\n")
+
     workdir = (project_root / spec.get("workdir", "workdir"))
     workdir.mkdir(parents=True, exist_ok=True)
     out_dir = (project_root / spec.get("out_dir", "experiments/run1"))
@@ -188,15 +250,16 @@ def main() -> int:
 
     tasks = []
     for case in spec["cases"]:
-        for goal in spec["goals"]:
-            for cond in spec["conditions"]:
+        for goal in goals_for_case(spec, case):
+            for cond in conditions:
                 for model in spec["models"]:
                     for rep in range(1, int(spec.get("reps", 1)) + 1):
                         tasks.append((case, goal, cond, model, rep))
 
+    n_cells = len({(c["name"], g["id"], k["id"], m["model"]) for c, g, k, m, _ in tasks})
     print(f"{'DRY-RUN: ' if args.dry_run else ''}{len(tasks)} runs "
-          f"({len(spec['cases'])} cases × {len(spec['goals'])} goals × "
-          f"{len(spec['conditions'])} conditions × {len(spec['models'])} models × {spec.get('reps',1)} reps)")
+          f"({n_cells} cells × {spec.get('reps', 1)} reps; {len(spec['cases'])} case entries, "
+          f"{len(conditions)} conditions, {len(spec['models'])} models)")
     print(f"project_root={project_root}\nout_dir={out_dir}\n")
 
     index_path = out_dir / "runs_index.jsonl"

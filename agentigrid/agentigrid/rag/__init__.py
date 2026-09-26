@@ -22,6 +22,9 @@ from .retriever import Retriever
 from .corrective import CorrectiveRetriever
 
 VALID_MODES = ("off", "basic", "corrective")
+# Graders implemented behind the corrective-RAG seam. "jev" is usable only when
+# jev_available() is true; otherwise it falls back to cosine at run time.
+VALID_CRAG_GRADERS = ("cosine", "jev")
 
 
 def resolve_rag_mode() -> str:
@@ -40,7 +43,7 @@ def resolve_crag_grader() -> str:
     'cosine' (default/unset) or 'jev'. Unknown values fall back to 'cosine'.
     """
     name = os.environ.get("AGENTIGRID_CRAG_GRADER", "").strip().lower()
-    return name if name in ("cosine", "jev") else "cosine"
+    return name if name in VALID_CRAG_GRADERS else "cosine"
 
 
 def _make_crag_grader():

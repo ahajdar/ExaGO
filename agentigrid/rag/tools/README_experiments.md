@@ -24,10 +24,23 @@ python rag/tools/experiment_runner.py --spec experiment_spec.json --dry-run
 python rag/tools/experiment_runner.py --spec experiment_spec.json
 ```
 
-**Spec fields:** `cases` (name/path/app), `goals` (id/text/optional `target_pct`),
-`conditions` (id + `env` dict, e.g. `{"AGENTIGRID_RAG":"1"}`), `models`
+**Spec fields:** `cases` (name/path/app, optional `network`, `goals` allowlist and
+`extra_args` such as `["--ctgc", "<file>.cont"]` for SCOPFLOW), `goals`
+(id/text/optional `target_pct`), `conditions` (id + `env` dict, e.g.
+`{"AGENTIGRID_RAG_MODE":"corrective","AGENTIGRID_CRAG_GRADER":"cosine"}`), `models`
 (backend/model/optional `extra_args`), plus `reps`, `max_iter`, `timeout_s`,
-`out_dir`, `project_root`, `skip_existing`.
+`out_dir`, `project_root`, `skip_existing`. A case runs only the goals in its
+`goals` list (all goals if omitted), so one network can appear as several case
+entries with different applications (e.g. OPFLOW for economic goals, SCOPFLOW for N-1).
+
+**Unimplemented conditions are refused.** AgentiGrid degrades an unknown RAG mode to
+`basic` and an unknown/unavailable grader to `cosine`, which would silently mislabel
+experiment data. The runner therefore checks every condition before starting and
+exits (code 2) if any would not run as labeled. `--dry-run` lists them;
+`--skip-unimplemented` runs only the implemented ones.
+
+The of-record spec is `agentigrid/grader_ablation_spec.json` (C0, C1, C2a/b/c, C3;
+case39 + ACTIVSg200; 20 reps).
 
 Add a new RAG variant later by adding a condition whose `env` sets whatever switch
 that variant reads (e.g. a future `AGENTIGRID_RAG_MODE=corrective`) — no runner change.

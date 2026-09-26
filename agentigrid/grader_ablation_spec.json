@@ -1,28 +1,50 @@
 {
+  "notes": [
+    "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b/c, C3.",
+    "C2b (reranker), C2c (reranker_calibrated) and C3 (graph) are not implemented yet; the runner refuses them unless --skip-unimplemented is passed, so no run is mislabeled.",
+    "C2c is gated: run it only if C2b beats C2a (paper H4).",
+    "case39 carries the economic goals only (no contingency file ships with ExaGO for case39).",
+    "ACTIVSg200 files are read from ../datafiles (the ExaGO distribution); N-1 uses its shipped contingency file with all contingencies (AgentiGrid passes -scopflow_Nc -1).",
+    "Localized goals (relieve, voltage) run on PFLOW because OPFLOW enforces line ratings and the voltage band as hard constraints. Pre-check pending: if the base PFLOW solve of ACTIVSg200 shows no overload / voltage violation, replace the pflow case path with a frozen stressed variant.",
+    "Run from the agentigrid project root with the venv active and OLLAMA_HOST set."
+  ],
   "agentigrid_cmd": "agentigrid",
   "project_root": ".",
   "workdir": "workdir",
-  "out_dir": "experiments/grader_ablation_v1",
-  "reps": 10,
+  "out_dir": "experiments/ofrecord_v2",
+  "reps": 20,
   "max_iter": 4,
   "timeout_s": 1800,
   "skip_existing": true,
   "cases": [
-    { "name": "case39", "path": "./data/case39.m", "app": "opflow" }
+    { "name": "case39-opflow",       "network": "case39",     "path": "./data/case39.m",                  "app": "opflow",
+      "goals": ["cost10", "loadmax"] },
+    { "name": "ACTIVSg200-opflow",   "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m",   "app": "opflow",
+      "goals": ["cost10", "loadmax"] },
+    { "name": "ACTIVSg200-scopflow", "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m",   "app": "scopflow",
+      "extra_args": ["--ctgc", "../datafiles/case_ACTIVSg200.cont"],
+      "goals": ["n1"] },
+    { "name": "ACTIVSg200-pflow",    "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m",   "app": "pflow",
+      "goals": ["relieve", "voltage"] }
   ],
   "goals": [
     { "id": "cost10",  "text": "Reduce total generation cost by 10%", "target_pct": 10 },
-    { "id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible" }
+    { "id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible" },
+    { "id": "n1",      "text": "Find the minimum cost dispatch that survives all N-1 contingencies" },
+    { "id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits" },
+    { "id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings" }
   ],
   "conditions": [
-    { "id": "C0-norag",       "env": { "AGENTIGRID_RAG_MODE": "off" } },
-    { "id": "C1-basic",       "env": { "AGENTIGRID_RAG_MODE": "basic" } },
-    { "id": "C2-crag-cosine", "env": { "AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine" } },
-    { "id": "C3-crag-jev",    "env": { "AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "jev" } }
+    { "id": "C0-norag",          "env": { "AGENTIGRID_RAG_MODE": "off" } },
+    { "id": "C1-basic",          "env": { "AGENTIGRID_RAG_MODE": "basic" } },
+    { "id": "C2a-crag-cosine",   "env": { "AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine" } },
+    { "id": "C2b-crag-reranker", "env": { "AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker" } },
+    { "id": "C2c-crag-calibrated", "env": { "AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated" } },
+    { "id": "C3-graph",          "env": { "AGENTIGRID_RAG_MODE": "graph" } }
   ],
   "models": [
-    { "backend": "ollama",    "model": "llama3:latest",    "extra_args": [] },
-    { "backend": "ollama",    "model": "qwen2.5:7b",       "extra_args": [] },
+    { "backend": "ollama",    "model": "llama3:latest",     "extra_args": [] },
+    { "backend": "ollama",    "model": "qwen2.5:7b",        "extra_args": [] },
     { "backend": "anthropic", "model": "claude-sonnet-4-6", "extra_args": [] }
   ]
 }
