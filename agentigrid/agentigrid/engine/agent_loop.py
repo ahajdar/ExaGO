@@ -1705,7 +1705,7 @@ class AgentLoopController:
             self._active_steering_directives[-1]["directive"]
             if self._active_steering_directives else None
         )
-        self._journal.add_from_results(
+        _modify_entry = self._journal.add_from_results(
             iteration=iteration,
             description=description,
             commands=raw_commands,
@@ -1719,6 +1719,7 @@ class AgentLoopController:
             gencost=modified_net.gencost if self._config.search.application == "pflow" else None,
             exago_command=_single_call_record(sim_result),
         )
+        _modify_entry.skipped_commands = list(all_errors)
 
         # Extract tracked metrics for multi-objective tracking
         if opflow is not None:

@@ -97,7 +97,8 @@ def harvest_help(bin_dir: Path, out_dir: Path, apps: list[str], timeout: int) ->
         vrc, vtext = _run([str(binary), "--version"], timeout)
         version = vtext.strip().splitlines()[0] if (vrc == 0 and vtext.strip()) else "unknown"
 
-        src = f"exago {app} --help | binary: {binary} | version: {version}"
+        # basename only: the absolute path is machine-specific and must not enter the corpus
+        src = f"exago {app} --help | binary: {Path(str(binary)).name} | version: {version}"
         chunks = [f"{_tag(src)}\n{para}" for para in _paragraphs(help_text)]
         if not chunks:
             continue

@@ -54,6 +54,11 @@ class JournalEntry:
     exago_command: Optional[dict] = None  # Reproducible ExaGO invocation record (JSON journal only; see add_* methods)
     contingency_meta: Optional[dict] = None  # C.5: target bus, neighbors, order, pass/fail counts
     reserve_meta: Optional[dict] = None  # C.8: hot-reserve / N-1 generator security accounting
+    # Modify iterations: commands the LLM proposed that were NOT applied (parse
+    # errors or validator skips), as messages. [] = every proposed command was
+    # applied; None = not recorded (non-modify entries, older journals). Lets the
+    # corpus scraper certify that an exemplar's `commands` all actually applied.
+    skipped_commands: Optional[list[str]] = None
 
 
 def is_solve_iteration(entry: JournalEntry) -> bool:
@@ -1096,7 +1101,7 @@ class SearchJournal:
             "mode", "elapsed_seconds", "timestamp", "steering_directive",
             "tracked_metrics", "feasibility_detail", "solver", "num_steps", "num_scenarios",
             "explored_variants", "candidate_count", "feasible_buses", "exago_command",
-            "contingency_meta", "reserve_meta",
+            "contingency_meta", "reserve_meta", "skipped_commands",
         ]
 
         with open(path, "w", newline="", encoding="utf-8") as f:
@@ -1111,6 +1116,7 @@ class SearchJournal:
                 row["exago_command"] = json.dumps(row.get("exago_command") or None)
                 row["contingency_meta"] = json.dumps(row.get("contingency_meta") or None)
                 row["reserve_meta"] = json.dumps(row.get("reserve_meta") or None)
+                row["skipped_commands"] = json.dumps(row.get("skipped_commands"))
                 writer.writerow(row)
 
         logger.info("Journal CSV exported to %s (%d entries)", path, len(self._entries))

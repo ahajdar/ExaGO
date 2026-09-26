@@ -52,6 +52,41 @@ Generate exemplars from a **capable** model run (`claude-sonnet-4-6` or
 good to harvest (that's the same flat-iterations failure documented in the setup
 guide).
 
+## 2b. Schema exemplars (no domain knowledge needed)
+
+    python rag/tools/rag_schema_exemplars.py
+
+Writes `rag/corpus/agentigrid_schema_exemplars.txt`: complete, correct responses
+(e.g. `set_all_bus_vlimits` nested inside a `modify` action, never as the
+top-level action). Each exemplar is certified by AgentiGrid's own parser,
+validator and modifier on the held-out case118; the one that no held-out case can
+host (phase shifter) is labelled "schema-validated only".
+
+## 2c. Corpus bootstrap (knowledge distillation)
+
+A capable model works HELD-OUT tasks; the scraper keeps only solver-certified
+iterations (applied commands, converged, feasible, zero violations):
+
+    python rag/tools/experiment_runner.py --spec rag/tools/specs/corpus_bootstrap_spec.json
+    python rag/tools/rag_scrape_journal.py --runs-dir experiments/corpus_bootstrap_v1 --inspect
+    python rag/tools/rag_scrape_journal.py --runs-dir experiments/corpus_bootstrap_v1
+
+The scraper refuses journals without a skip record (`--allow-legacy` to override),
+teaches the `modify` action JSON rather than the ExaGO command line, and drops
+anything from the evaluated networks/goals (`grader_ablation_spec.json`).
+
+## 2d. Audit and freeze
+
+    python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus
+    python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus --freeze
+
+Flags goal leaks, worked examples on evaluated networks, and personal paths;
+`--freeze` (refused while findings remain) writes `corpus_manifest.json` with the
+corpus SHA-256 that runs should record.
+
+Copyright: do not paste paper or textbook text into the corpus. State facts in
+your own words and cite, or keep such notes in a local, gitignored corpus.
+
 ## 3. Re-ingest after harvesting
 
 Both scripts print this; run it once when you're done:

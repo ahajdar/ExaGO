@@ -1,0 +1,46 @@
+{
+  "notes": [
+    "Corpus bootstrap (knowledge distillation): a capable model works HELD-OUT tasks; rag_scrape_journal.py keeps only solver-certified iterations as exemplars.",
+    "Held out from the of-record experiment by construction: different networks (case118, case_ACTIVSg500, case9mod) and different goal instances. The scraper additionally drops anything from grader_ablation_spec.json networks/goals.",
+    "Condition C0-norag only, so the corpus is not built from its own retrievals.",
+    "Model: the eval set also uses claude-sonnet-4-6. Generating with the same model makes the strong-model arm mildly circular; the weak/mid arms are unaffected. Record the choice in the paper, or switch 'model' to a model outside the eval set.",
+    "PFLOW goals (overload relief / voltage support) need a stressed variant of each held-out case: run rag/tools/precheck_cases.py --case <case> --apps pflow [--vband 0.95,1.05], freeze with --write-stressed, then add a pflow case entry pointing at the frozen file.",
+    "Run from the agentigrid project root: python rag/tools/experiment_runner.py --spec rag/tools/specs/corpus_bootstrap_spec.json"
+  ],
+  "agentigrid_cmd": "agentigrid",
+  "project_root": ".",
+  "workdir": "workdir",
+  "out_dir": "experiments/corpus_bootstrap_v1",
+  "reps": 3,
+  "max_iter": 6,
+  "timeout_s": 1800,
+  "skip_existing": true,
+  "cases": [
+    { "name": "case9mod-opflow",   "network": "case9mod",        "path": "../datafiles/case9/case9mod.m",     "app": "opflow",
+      "goals": ["cost5", "vband97", "gen_out"] },
+    { "name": "case118-opflow",    "network": "case118",         "path": "../datafiles/case118.m",            "app": "opflow",
+      "goals": ["cost5", "vband97", "gen_out", "load_growth"] },
+    { "name": "case118-scopflow",  "network": "case118",         "path": "../datafiles/case118.m",            "app": "scopflow",
+      "extra_args": ["--ctgc", "../datafiles/case118.cont"],
+      "goals": ["secure_dispatch", "secure_band"] },
+    { "name": "ACTIVSg500-opflow", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m",   "app": "opflow",
+      "goals": ["cost5", "vband97", "load_growth"] },
+    { "name": "ACTIVSg500-scopflow", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m", "app": "scopflow",
+      "extra_args": ["--ctgc", "../datafiles/case_ACTIVSg500.cont"],
+      "goals": ["secure_dispatch"] }
+  ],
+  "goals": [
+    { "id": "cost5",           "text": "Lower the total generation cost by at least 5% while staying feasible" },
+    { "id": "vband97",         "text": "Keep every bus voltage between 0.97 and 1.03 pu at the lowest cost you can find" },
+    { "id": "gen_out",         "text": "Take the largest generator out of service and restore a feasible, low-cost operating point" },
+    { "id": "load_growth",     "text": "Determine how much uniform load growth the system tolerates while remaining feasible, testing growth in steps" },
+    { "id": "secure_dispatch", "text": "Obtain a dispatch that stays feasible for every contingency in the contingency file and report its cost" },
+    { "id": "secure_band",     "text": "Obtain a contingency-secure dispatch with all bus voltages held between 0.96 and 1.04 pu" }
+  ],
+  "conditions": [
+    { "id": "C0-norag", "env": { "AGENTIGRID_RAG_MODE": "off" } }
+  ],
+  "models": [
+    { "backend": "anthropic", "model": "claude-sonnet-4-6", "extra_args": [] }
+  ]
+}
