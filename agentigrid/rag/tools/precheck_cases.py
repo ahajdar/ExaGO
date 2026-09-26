@@ -86,50 +86,68 @@ def _pflow_usable(rec: dict | None) -> bool:
     return bool(rec and rec.get("parsed") and rec.get("converged"))
 
 
+def _ran(rec: dict | None) -> bool:
+    """The solver actually ran and its output was parsed (converged or not)."""
+    return bool(rec and rec.get("parsed"))
+
+
+def check_goal(goal: str, r: dict[str, dict]):
+    """True / False = goal meaningful / degenerate at this scale;
+    None = undetermined because a required solve did not run or was not parsed
+    (e.g. a missing file). Undetermined is never reported as usable."""
+    if goal == "n1":
+        o, sc = r.get("opflow"), r.get("scopflow")
+        if not (_ran(o) and _ran(sc)):
+            return None
+        return _feasible(o) and not _feasible(sc)
+    p = r.get("pflow")
+    if not _ran(p):
+        return None
+    if goal == "relieve":
+        return _pflow_usable(p) and p.get("thermal_violations", 0) > 0
+    if goal == "voltage":
+        return _pflow_usable(p) and p.get("voltage_violations", 0) > 0
+    raise ValueError(goal)
+
+
 def classify(results: dict[float, dict[str, dict]]) -> dict:
     """Verdict per goal from {scale: {app: record}}.
 
-    A goal is meaningful at a scale when the unmodified-at-that-scale case poses
-    the problem the goal asks the agent to solve:
+    A goal is meaningful at a scale when the case at that scale poses the
+    problem the goal asks the agent to solve:
       n1      -> SCOPFLOW (all contingencies) is NOT feasible, while OPFLOW is
                  (so N-1 security is the binding issue, not base infeasibility);
       relieve -> PFLOW converges and shows >= 1 thermal overload;
       voltage -> PFLOW converges and shows >= 1 bus-voltage violation.
+    A scale where a required solve failed to run is UNDETERMINED, not usable.
     """
     scales = sorted(results)
     base = 1.0 if 1.0 in results else scales[0]
-
-    def meaningful(goal: str, s: float) -> bool:
-        r = results[s]
-        if goal == "n1":
-            return _feasible(r.get("opflow")) and not _feasible(r.get("scopflow"))
-        if goal == "relieve":
-            p = r.get("pflow")
-            return _pflow_usable(p) and p.get("thermal_violations", 0) > 0
-        if goal == "voltage":
-            p = r.get("pflow")
-            return _pflow_usable(p) and p.get("voltage_violations", 0) > 0
-        raise ValueError(goal)
-
     out = {}
     for goal in ("n1", "relieve", "voltage"):
-        ok_scales = [s for s in scales if meaningful(goal, s)]
-        at_base = base in ok_scales
+        checks = {s: check_goal(goal, results[s]) for s in scales}
+        ok_scales = [s for s in scales if checks[s] is True]
+        undetermined = [s for s in scales if checks[s] is None]
         first = ok_scales[0] if ok_scales else None
-        if at_base:
+        at_base = checks[base] is True
+        if checks[base] is None:
+            verdict = "UNDETERMINED at base — a required solve did not run; fix the error and re-run"
+        elif at_base:
             verdict = "OK at base case — use the unmodified case"
         elif first is not None:
             verdict = f"degenerate at base; meaningful from load scale x{first} — freeze a stressed variant"
+        elif undetermined:
+            verdict = "degenerate where determinable; some scales undetermined — fix errors and re-run"
         else:
             verdict = "degenerate at every scanned scale — widen --scales or redesign the goal"
         out[goal] = {"meaningful_at_base": at_base, "first_meaningful_scale": first,
-                     "meaningful_scales": ok_scales, "verdict": verdict}
-    # Base-case N-1 detail: why degenerate?
+                     "meaningful_scales": ok_scales, "undetermined_scales": undetermined,
+                     "verdict": verdict}
     b = results[base]
-    if _feasible(b.get("scopflow")):
+    if _ran(b.get("scopflow")) and _feasible(b.get("scopflow")):
         out["n1"]["note"] = ("SCOPFLOW is already feasible with all contingencies at the base case, "
                              "so it returns the minimum-cost N-1-secure dispatch by itself.")
-    elif not _feasible(b.get("opflow")):
+    elif _ran(b.get("opflow")) and not _feasible(b.get("opflow")):
         out["n1"]["note"] = "OPFLOW itself is infeasible at the base case — the problem is not N-1 specific."
     return out
 
@@ -140,13 +158,16 @@ def classify(results: dict[float, dict[str, dict]]) -> dict:
 
 def scopflow_args(ctgc: Path, mpi_np: int) -> list[str]:
     """Exactly what AgentiGrid passes for SCOPFLOW (see agent_loop._build_extra_args)."""
-    args = ["-ctgcfile", str(ctgc), "-scopflow_Nc", "-1"]
+    # Absolute: ExaGO runs with cwd = its per-iteration run dir, so a relative path
+    # would not resolve (AgentiGrid's config loader makes ctgc_file absolute too).
+    args = ["-ctgcfile", str(Path(ctgc).resolve()), "-scopflow_Nc", "-1"]
     if mpi_np > 1:
         args += ["-scopflow_solver", "EMPAR"]
     return args
 
 
-def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, ...]):
+def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, ...],
+             vband: tuple[float, float] | None = None):
     from agentigrid.engine.commands import ScaleAllLoads
     from agentigrid.engine.executor import SimulationExecutor
     from agentigrid.engine.modifier import apply_modifications
@@ -155,6 +176,8 @@ def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, 
 
     base_net = parse_matpower(case)
     limits = {b.bus_i: (b.Vmin, b.Vmax) for b in base_net.buses}
+    if vband is not None:  # judge voltage violations against a tighter/looser band
+        limits = {bus: vband for bus in limits}
     executor = SimulationExecutor(cfg.exago, cfg.output)
     results: dict[float, dict[str, dict]] = {}
     for i, s in enumerate(scales):
@@ -171,21 +194,28 @@ def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, 
             print(f"  x{s:<5} {app:<9} status={rec.get('status')!s:<22} "
                   f"feas={rec.get('feasibility')!s:<10} viol(V/T)={rec.get('voltage_violations','-')}/"
                   f"{rec.get('thermal_violations','-')}  maxload={rec.get('max_line_loading_pct','-')}%  "
+                  f"V=[{rec.get('voltage_min','-')},{rec.get('voltage_max','-')}]  "
                   f"obj={rec.get('objective')}  ({rec.get('elapsed_s')}s)")
             if not rec.get("parsed"):
                 print(f"           error: {str(rec.get('error') or 'no output').strip()[:300]}")
     return results
 
 
-def write_stressed(case: Path, factor: float, out_dir: Path) -> Path:
+def write_stressed(case: Path, factor: float, out_dir: Path,
+                   vband: tuple[float, float] | None = None) -> Path:
     from agentigrid.engine.commands import ScaleAllLoads
     from agentigrid.engine.modifier import apply_modifications
     from agentigrid.parsers.matpower_parser import parse_matpower
     from agentigrid.parsers.matpower_writer import write_matpower
 
     net, _ = apply_modifications(parse_matpower(case), [ScaleAllLoads(factor=factor)])
+    suffix = f"_load{factor:g}"
+    if vband is not None:
+        for b in net.buses:
+            b.Vmin, b.Vmax = vband
+        suffix += f"_v{vband[0]:g}-{vband[1]:g}"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out = out_dir / f"{case.stem}_load{factor:g}.m"
+    out = out_dir / f"{case.stem}{suffix}.m"
     write_matpower(net, out)
     return out
 
@@ -201,6 +231,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--write-stressed", type=float, metavar="F",
                     help="write the case scaled by F to --stressed-dir and exit")
     ap.add_argument("--stressed-dir", default="data")
+    ap.add_argument("--vband", metavar="LO,HI",
+                    help="judge bus-voltage violations against this band (pu) instead of the "
+                         "case's Vmin/Vmax; with --write-stressed, also write it into the variant")
     args = ap.parse_args(argv)
 
     case, ctgc = Path(args.case), Path(args.ctgc)
@@ -208,8 +241,13 @@ def main(argv: list[str] | None = None) -> int:
         print(f"case not found: {case}", file=sys.stderr)
         return 2
 
+    vband = None
+    if args.vband:
+        lo, hi = (float(x) for x in args.vband.split(","))
+        vband = (lo, hi)
+
     if args.write_stressed is not None:
-        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir))
+        out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband)
         print(f"Wrote stressed variant: {out}\nPoint the spec's pflow (and/or scopflow) case entry at it.")
         return 0
 
@@ -223,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
     cfg = load_config(args.config) if args.config else load_config(None)
 
     print(f"Pre-check {case} (contingencies: {ctgc}) at scales {scales}\n")
-    results = run_scan(cfg, case, ctgc, scales, apps)
+    if vband:
+        print(f"Voltage band for violation checks: {vband[0]}-{vband[1]} pu (overrides case limits)\n")
+    results = run_scan(cfg, case, ctgc, scales, apps, vband)
     verdicts = classify(results) if {"opflow", "pflow", "scopflow"} <= set(apps) else {}
 
     print("\nVerdicts")

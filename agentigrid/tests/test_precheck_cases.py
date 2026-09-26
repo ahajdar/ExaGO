@@ -48,7 +48,8 @@ def test_n1_degenerate_when_scopflow_already_feasible():
 
 
 def test_scopflow_args_match_agentigrid():
-    assert pc.scopflow_args(Path("c.cont"), 1) == ["-ctgcfile", "c.cont", "-scopflow_Nc", "-1"]
+    a = pc.scopflow_args(Path("c.cont"), 1)
+    assert a[0] == "-ctgcfile" and a[1].endswith("c.cont") and a[2:] == ["-scopflow_Nc", "-1"]
     assert pc.scopflow_args(Path("c.cont"), 4)[-2:] == ["-scopflow_solver", "EMPAR"]
 
 
@@ -61,3 +62,28 @@ def test_write_stressed_scales_loads(tmp_path):
     pd1 = sum(b.Pd for b in scaled.buses)
     assert abs(pd1 - 1.2 * pd0) < 1e-6 * max(1.0, pd0)
     assert out.name == "case9mod_load1.2.m"
+
+
+def test_failed_scopflow_is_undetermined_not_ok():
+    """Regression: a SCOPFLOW run that never executed (e.g. contingency file not
+    found) must not be read as 'SCOPFLOW infeasible' -> 'n1 OK'."""
+    failed = {"parsed": False, "converged": False, "status": "FAILED", "error": "Cannot open file"}
+    r = {1.0: {"opflow": _rec(), "scopflow": failed, "pflow": _rec()}}
+    v = pc.classify(r)
+    assert v["n1"]["meaningful_at_base"] is False
+    assert v["n1"]["verdict"].startswith("UNDETERMINED")
+    assert v["n1"]["undetermined_scales"] == [1.0]
+
+
+def test_scopflow_args_use_absolute_path(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    args = pc.scopflow_args(Path("../x/c.cont"), 1)
+    assert Path(args[1]).is_absolute()
+
+
+def test_write_stressed_with_voltage_band(tmp_path):
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    case = ROOT.parent / "datafiles" / "case9" / "case9mod.m"
+    out = pc.write_stressed(case, 1.1, tmp_path, (0.95, 1.05))
+    assert out.name == "case9mod_load1.1_v0.95-1.05.m"
+    assert {(b.Vmin, b.Vmax) for b in parse_matpower(out).buses} == {(0.95, 1.05)}
