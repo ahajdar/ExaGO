@@ -254,6 +254,32 @@ class TestErrorRecovery:
         assert len(session.journal) == 3  # base + modify + complete
         assert session.termination_reason == "completed"
 
+    def test_discarded_iterations_are_journaled_as_telemetry(self, tmp_path: Path):
+        """An unparseable action and an unknown action record no entry, but are
+        kept in journal.discarded_actions (validator-rejection telemetry)."""
+        cfg = _make_config(tmp_path, max_iterations=10)
+        responses = [
+            _objectives_response(),                                   # objective parser
+            _make_llm_response(None, raw_text="This is not JSON"),    # iter 1
+            _make_llm_response({"action": "dance", "reasoning": "x"}),  # iter 2
+            _make_llm_response({"action": "complete", "reasoning": "Done",
+                                "findings": {"summary": "ok"}}),     # iter 3
+        ]
+        mock_backend = MockBackend(responses)
+        sim_result = _make_sim_result(stdout=_sample_stdout(), success=True)
+        with patch("agentigrid.engine.agent_loop.create_backend", return_value=mock_backend), \
+             patch("agentigrid.engine.agent_loop.SimulationExecutor") as mock_exec_cls:
+            mock_executor = MagicMock()
+            mock_executor.run.return_value = sim_result
+            mock_exec_cls.return_value = mock_executor
+            controller = AgentLoopController(cfg)
+            session = controller.run(BASE_CASE, "Test discard telemetry")
+
+        assert len(session.journal) == 2  # base + complete
+        disc = session.journal.discarded_actions
+        assert [(d["iteration"], d["kind"]) for d in disc] == [(1, "rejected"), (2, "rejected")]
+        assert "parse JSON" in disc[0]["feedback"] and "Unknown action" in disc[1]["feedback"]
+
     def test_unknown_action(self, tmp_path: Path):
         """LLM returns unknown action, then completes."""
         cfg = _make_config(tmp_path, max_iterations=10)

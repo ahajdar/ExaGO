@@ -97,15 +97,22 @@ def base_cost(entries):
 # A goal may declare BOTH (e.g. the N-1 cost goal: n1_secure AND target_pct):
 # then both must hold on the same entry.
 #
-# Cost-target guard (target_pct only). A cost reduction does not count when it
-# comes from changing the problem rather than solving it:
-#   * load reduction -- the entry's total_load_mw is below the baseline's by more
-#     than LOAD_TOL (relative);
-#   * cost-curve edits -- a set_cost_coeffs command is in effect for the entry:
-#     its own commands, plus, for non-"fresh" entries, every command since the
-#     last "fresh" entry (incremental modes build on the current network).
-#     Deliberately conservative: counting a command that a revert later undid
-#     can only produce a false negative, never a false success.
+# Intent guards. A goal (and a case) may declare deterministic goal-constraint
+# checks, stated in the goal text identically in every condition. A post-baseline
+# solve that violates one is an INTENT VIOLATION: executable, possibly feasible,
+# but not what was asked. It never counts toward attainment (or, for cost goals,
+# toward cost improvement). Guards (manifest "guards"; spec: goal + case lists):
+#   * "load_preserved"   -- total_load_mw not below baseline by more than LOAD_TOL;
+#   * "no_cost_edits"    -- no set_cost_coeffs in effect;
+#   * "no_rating_edits"  -- no set_branch_rate in effect;
+#   * {"vband_not_widened": [lo, hi]} -- no set_(all_)bus_vlimits outside [lo, hi];
+#   * {"branch_stays_out": [fbus, tbus, ckt]} -- that branch not set back in service.
+# "In effect" = the entry's own commands plus, for non-"fresh" entries, every
+# command since the last "fresh" entry (incremental modes build on the current
+# network). Deliberately conservative: counting a command that a revert later
+# undid can only produce a false negative, never a false success.
+# Legacy manifests without "guards": cost-target goals get load_preserved +
+# no_cost_edits, other goals none.
 #
 # Attainment is judged on post-baseline solve entries only: the agent must reach
 # the goal. ``baseline_attained`` reports whether iteration 0 already satisfied
@@ -161,29 +168,31 @@ def _single_solve(e) -> bool:
 
 
 LOAD_TOL = 1e-3                      # 0.1 % relative
-COST_EDIT_ACTIONS = frozenset({"set_cost_coeffs"})
+GUARD_NAMES = ("load_preserved", "no_cost_edits", "no_rating_edits",
+               "vband_not_widened", "branch_stays_out")
+DEFAULT_COST_GUARDS = ["load_preserved", "no_cost_edits"]
 
 
 def _actions(cmds) -> list[str]:
-    out = []
-    for c in cmds or []:
-        if isinstance(c, dict):
-            out.append(str(c.get("action", "")).lower())
-    return out
+    return [str(c.get("action", "")).lower() for c in (cmds or []) if isinstance(c, dict)]
 
 
-def effective_actions(entries, idx: int) -> list[str]:
-    """Actions that may be in effect for entries[idx] (see guard notes above)."""
-    acts: list[str] = []
+def effective_commands(entries, idx: int) -> list[dict]:
+    """Commands that may be in effect for entries[idx] (see guard notes above)."""
+    cmds: list[dict] = []
     for prev in reversed(entries[: idx + 1]):
         if not isinstance(prev, dict):
             continue
         if prev.get("iteration", 0) == 0:
             break
-        acts.extend(_actions(prev.get("commands")))
+        cmds.extend(c for c in (prev.get("commands") or []) if isinstance(c, dict))
         if prev.get("mode") == "fresh":
             break
-    return acts
+    return cmds
+
+
+def effective_actions(entries, idx: int) -> list[str]:
+    return _actions(effective_commands(entries, idx))
 
 
 def base_load(entries):
@@ -193,19 +202,73 @@ def base_load(entries):
     return None
 
 
+def normalize_guards(guards) -> list[tuple[str, object]]:
+    out = []
+    for g in guards or []:
+        if isinstance(g, str):
+            name, arg = g, None
+        elif isinstance(g, dict) and len(g) == 1:
+            name, arg = next(iter(g.items()))
+        else:
+            raise ValueError(f"bad guard spec {g!r}")
+        if name not in GUARD_NAMES:
+            raise ValueError(f"unknown guard {name!r}; expected one of {GUARD_NAMES}")
+        out.append((name, arg))
+    return out
+
+
+def goal_guards(goal: dict) -> list[tuple[str, object]]:
+    if goal.get("guards") is not None:
+        return normalize_guards(goal["guards"])
+    return normalize_guards(DEFAULT_COST_GUARDS if goal.get("target_pct") is not None else [])
+
+
+def _same_branch(c: dict, fbus, tbus, ckt) -> bool:
+    try:
+        a, b = int(c.get("fbus")), int(c.get("tbus"))
+    except (TypeError, ValueError):
+        return False
+    return {a, b} == {int(fbus), int(tbus)} and int(c.get("ckt") or 0) == int(ckt or 0)
+
+
+def guard_violations(e, cmds, base_load_mw, guards) -> list[str]:
+    """Names of the guards this entry violates (empty = intent respected)."""
+    acts = _actions(cmds)
+    bad = []
+    for name, arg in guards:
+        if name == "load_preserved":
+            load = _num(e.get("total_load_mw"))
+            if base_load_mw not in (None, 0) and load is not None and load < base_load_mw * (1.0 - LOAD_TOL):
+                bad.append(name)
+        elif name == "no_cost_edits" and "set_cost_coeffs" in acts:
+            bad.append(name)
+        elif name == "no_rating_edits" and "set_branch_rate" in acts:
+            bad.append(name)
+        elif name == "vband_not_widened":
+            lo, hi = arg
+            for c in cmds:
+                if str(c.get("action", "")).lower() in ("set_bus_vlimits", "set_all_bus_vlimits"):
+                    vmin, vmax = _num(c.get("Vmin")), _num(c.get("Vmax"))
+                    if (vmin is not None and vmin < lo - 1e-6) or (vmax is not None and vmax > hi + 1e-6):
+                        bad.append(name)
+                        break
+        elif name == "branch_stays_out":
+            f, t, k = (list(arg) + [0])[:3]
+            if any(str(c.get("action", "")).lower() == "set_branch_status" and int(c.get("status", 0)) == 1
+                   and _same_branch(c, f, t, k) for c in cmds):
+                bad.append(name)
+    return bad
+
+
 def cost_guard_reason(e, actions, base_load_mw) -> str | None:
-    """Why a cost reduction on this entry does not count (None = it counts)."""
-    if COST_EDIT_ACTIONS & set(actions):
-        return "cost_curve_edit"
-    load = _num(e.get("total_load_mw"))
-    if base_load_mw not in (None, 0) and load is not None:
-        if load < base_load_mw * (1.0 - LOAD_TOL):
-            return "load_reduced"
-    return None
+    """Back-compat wrapper (cost guards from an action-name list)."""
+    cmds = [{"action": a} for a in actions]
+    bad = guard_violations(e, cmds, base_load_mw, normalize_guards(DEFAULT_COST_GUARDS))
+    return {"no_cost_edits": "cost_curve_edit", "load_preserved": "load_reduced"}.get(bad[0]) if bad else None
 
 
-def entry_attains(e, goal: dict, base_cost, actions=None, base_load_mw=None) -> bool:
-    """Does this single journal entry satisfy the goal's success predicate(s)?"""
+def predicate_holds(e, goal: dict, base_cost) -> bool:
+    """The goal's success predicate(s) alone, ignoring guards."""
     if not _single_solve(e) or not e.get("feasible"):
         return False
     success = goal.get("success")
@@ -222,40 +285,95 @@ def entry_attains(e, goal: dict, base_cost, actions=None, base_load_mw=None) -> 
     obj = _num(e.get("objective_value"))
     if obj is None or base_cost in (None, 0):
         return False
-    if cost_guard_reason(e, actions or [], base_load_mw) is not None:
-        return False
     return (base_cost - obj) / base_cost * 100.0 >= float(target)
 
 
+def entry_attains(e, goal: dict, base_cost, cmds=None, base_load_mw=None) -> bool:
+    """Predicate holds AND no guard is violated. *cmds* are the commands in
+    effect (dicts); a list of action-name strings is accepted for back-compat."""
+    if not predicate_holds(e, goal, base_cost):
+        return False
+    cmds = [c if isinstance(c, dict) else {"action": c} for c in (cmds or [])]
+    return not guard_violations(e, cmds, base_load_mw, goal_guards(goal))
+
+
 def attainment_for(entries, goal: dict, base_cost) -> dict:
-    """goal_attained / baseline_attained / iterations_to_goal for one run."""
+    """goal_attained / baseline_attained / iterations_to_goal / guard_rejections."""
+    none = {"goal_attained": None, "baseline_attained": None, "iterations_to_goal": None,
+            "guard_rejections": None}
     if goal.get("success") is None and goal.get("target_pct") is None:
-        return {"goal_attained": None, "baseline_attained": None, "iterations_to_goal": None,
-                "cost_guard_rejections": None}
+        return none
     if goal.get("success") is not None and goal["success"] not in SUCCESS_PREDICATES:
         raise ValueError(f"unknown success predicate {goal['success']!r}; "
                          f"expected one of {SUCCESS_PREDICATES}")
+    guards = goal_guards(goal)
     dict_entries = [e for e in entries if isinstance(e, dict)]
     bl = base_load(dict_entries)
-    hits, base_hit, guarded = [], False, 0
+    hits, base_hit, rejected = [], False, 0
     for i, e in enumerate(dict_entries):
-        acts = effective_actions(dict_entries, i)
-        ok = entry_attains(e, goal, base_cost, acts, bl)
+        holds = predicate_holds(e, goal, base_cost)
+        if not holds:
+            continue
+        ok = not guard_violations(e, effective_commands(dict_entries, i), bl, guards)
         if e.get("iteration", 0) == 0:
             base_hit = base_hit or ok
-            continue
-        if ok:
+        elif ok:
             hits.append(e.get("iteration", 0))
-        elif (goal.get("target_pct") is not None
-              and entry_attains(e, goal, base_cost, [], None)):
-            guarded += 1          # would have counted without the cost guard
+        else:
+            rejected += 1         # would have counted without the guards
     hits.sort()
     return {
         "goal_attained": int(bool(hits)),
         "baseline_attained": int(base_hit),
         "iterations_to_goal": hits[0] if hits else None,
-        "cost_guard_rejections": guarded if goal.get("target_pct") is not None else None,
+        "guard_rejections": rejected if guards else None,
     }
+
+
+def intent_metrics(entries, goal: dict) -> dict:
+    """H3 metrics. Executed proposals = post-baseline single solves that applied a
+    modification; an intent violation is such a solve violating >= 1 guard."""
+    guards = goal_guards(goal)
+    dict_entries = [e for e in entries if isinstance(e, dict)]
+    bl = base_load(dict_entries)
+    executed = viol = 0
+    per = {name: 0 for name, _ in guards}
+    for i, e in enumerate(dict_entries):
+        if e.get("iteration", 0) == 0 or not _single_solve(e) or not has_modification(e):
+            continue
+        executed += 1
+        bad = guard_violations(e, effective_commands(dict_entries, i), bl, guards)
+        if bad:
+            viol += 1
+            for b in set(bad):
+                per[b] += 1
+    out = {"executed_proposals": executed,
+           "intent_violations": viol if guards else None,
+           "intent_violation_rate": (round(viol / executed, 3) if executed else None) if guards else None}
+    for name in GUARD_NAMES:
+        out[f"intent_{name}"] = per.get(name) if name in per else None
+    return out
+
+
+def validator_metrics(journal: dict, entries) -> dict:
+    """H3 metrics. An LLM iteration is REJECTED by the deterministic validator /
+    parser when it recorded no entry (journal discarded_actions, kind 'rejected')
+    or recorded an entry with >= 1 skipped command. Internal errors are excluded
+    from both numerator and denominator."""
+    disc = journal.get("discarded_actions") if isinstance(journal, dict) else None
+    disc = [d for d in (disc or []) if isinstance(d, dict)]
+    rejected_it = {d.get("iteration") for d in disc if d.get("kind", "rejected") == "rejected"}
+    internal_it = {d.get("iteration") for d in disc if d.get("kind") == "internal"}
+    recorded_it = {e.get("iteration") for e in entries if isinstance(e, dict) and e.get("iteration", 0) != 0}
+    partial_it = {e.get("iteration") for e in entries
+                  if isinstance(e, dict) and e.get("iteration", 0) != 0 and e.get("skipped_commands")}
+    llm_it = (recorded_it | rejected_it) - internal_it
+    rej = (rejected_it | partial_it) - internal_it
+    return {"llm_iterations": len(llm_it),
+            "validator_rejections": len(rej),
+            "validator_rejection_rate": round(len(rej) / len(llm_it), 3) if llm_it else None,
+            "discarded_internal": len(internal_it),
+            "has_discard_telemetry": int(isinstance(journal, dict) and "discarded_actions" in journal)}
 
 
 def has_modification(e):
@@ -270,7 +388,10 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
 
     bc = base_cost(entries)
     goal = {"target_pct": manifest.get("target_pct"), "success": manifest.get("success")}
+    if manifest.get("guards") is not None:
+        goal["guards"] = manifest["guards"]
     cost_goal = goal["target_pct"] is not None
+    guards = goal_guards(goal)
     dict_entries = [e for e in entries if isinstance(e, dict)]
     bl = base_load(dict_entries)
     solve_ids = {id(e) for e in solves}
@@ -279,7 +400,7 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         if id(e) not in solve_ids or not e.get("feasible") or _num(e.get("objective_value")) is None:
             continue
         # For cost goals the reported improvement obeys the same guard as attainment.
-        if cost_goal and cost_guard_reason(e, effective_actions(dict_entries, i), bl):
+        if cost_goal and guard_violations(e, effective_commands(dict_entries, i), bl, guards):
             continue
         feasible_costs.append(e["objective_value"])
     best = min(feasible_costs) if feasible_costs else None
@@ -316,6 +437,8 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         "rag_enabled": (journal.get("rag_enabled")
                         if isinstance(journal, dict) and "rag_enabled" in journal
                         else manifest.get("condition_env", {}).get("AGENTIGRID_RAG")),
+        **intent_metrics(entries, goal),
+        **validator_metrics(journal, entries),
         **usage_metrics(journal),
         **rag_metrics(journal),
     }
@@ -413,6 +536,7 @@ NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "solve_elapsed_s",
            "llm_prompt_tokens", "llm_completion_tokens",
            "llm_cache_creation_tokens", "llm_cache_read_tokens",
            "n_solve_iters", "wall_s",
+           "validator_rejection_rate", "intent_violation_rate",   # H3
            "iterations_to_goal"]  # mean over runs that attained the goal only
 RATE = ["any_feasible", "goal_attained", "baseline_attained"]  # averaged as proportions
 

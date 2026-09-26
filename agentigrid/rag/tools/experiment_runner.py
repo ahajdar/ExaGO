@@ -169,6 +169,9 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
         "case_path": case["path"], "app": case.get("app"),
         "goal_id": goal["id"], "goal_text": goal["text"], "target_pct": goal.get("target_pct"),
         "success": goal.get("success"),
+        # None (neither declares guards) lets the evaluator apply its defaults.
+        "guards": (None if goal.get("guards") is None and case.get("guards") is None
+                   else list(goal.get("guards") or []) + list(case.get("guards") or [])),
         "condition": cond["id"], "condition_env": cond.get("env", {}),
         "backend": model["backend"], "model": model["model"],
         "max_iter": spec.get("max_iter", 4), "rep": rep,

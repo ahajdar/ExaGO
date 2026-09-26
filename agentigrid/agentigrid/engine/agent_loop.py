@@ -1255,10 +1255,15 @@ class AgentLoopController:
                     f"strictly follows the schema."
                 )
                 action_type, should_continue = "error", True
+                internal_error = True
+            else:
+                internal_error = False
             # Did THIS iteration record a journal entry? A discarded/invalid action
             # (common with weak local models) appends nothing.
             latest_entry = self._journal.latest
             recorded = latest_entry is not None and latest_entry.iteration == iteration
+            if action_type == "error" and not recorded:
+                self._record_discarded(iteration, internal_error)
             # Notify the UI only on a real new entry; otherwise show a transient
             # discarded card (avoids re-emitting the previous entry as a phantom).
             if self._on_iteration:
@@ -1315,6 +1320,17 @@ class AgentLoopController:
     # ------------------------------------------------------------------
     # Discarded-iteration diagnostic
     # ------------------------------------------------------------------
+
+    def _record_discarded(self, iteration: int, internal: bool = False) -> None:
+        """Journal telemetry for an iteration whose action produced no entry.
+
+        Only counts are persisted (plus the truncated feedback that was sent back
+        to the model); the entry list and all summary statistics are unaffected."""
+        self._journal.discarded_actions.append({
+            "iteration": iteration,
+            "kind": "internal" if internal else "rejected",
+            "feedback": (self._error_feedback or "")[:300],
+        })
 
     def _emit_discarded(self, iteration: int) -> None:
         """Emit a UI-only 'discarded' timeline card for an iteration whose action
@@ -5140,10 +5156,15 @@ class AgentLoopController:
                     f"strictly follows the schema."
                 )
                 action_type, should_continue = "error", True
-                    
+                internal_error = True
+            else:
+                internal_error = False
+
             # Only emit when this iteration recorded a new entry (see run() above).
             latest_entry = self._journal.latest
             recorded = latest_entry is not None and latest_entry.iteration == iteration
+            if action_type == "error" and not recorded:
+                self._record_discarded(iteration, internal_error)
             if self._on_iteration:
                 if recorded:
                     self._on_iteration(iteration, latest_entry, action_type, self._latest_opflow)

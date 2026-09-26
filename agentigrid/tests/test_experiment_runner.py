@@ -118,7 +118,7 @@ def test_repo_spec_is_consistent():
     for case in spec["cases"]:
         assert set(case.get("goals", ids)) <= ids
     assert spec["reps"] == 20
-    assert [c["id"].split("-")[0] for c in spec["conditions"]] == ["C0", "C1", "C2a", "C2b", "C2c", "C3"]
+    assert [c["id"].split("-")[0] for c in spec["conditions"]] == ["C0", "C1", "C2a", "C2b", "C2c"]  # graph RAG out of scope
     scopf = [c for c in spec["cases"] if c["app"] == "scopflow"]
     assert scopf and all("--ctgc" in c["extra_args"] for c in scopf)
 

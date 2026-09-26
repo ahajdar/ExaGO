@@ -1,7 +1,7 @@
 {
   "notes": [
-    "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b/c, C3.",
-    "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only). C2c (reranker_calibrated) and C3 (graph) are not implemented yet; the runner refuses them unless --skip-unimplemented is passed.",
+    "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b/c. Graph RAG (formerly C3) is out of scope for this paper (planned follow-up).",
+    "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only). C2c (reranker_calibrated) is not implemented yet; the runner refuses it unless --skip-unimplemented is passed.",
     "C2c is gated: run it only if C2b beats C2a (paper H4).",
     "case39 carries the economic goals only (no contingency file ships with ExaGO for case39).",
     "Pre-check 2026-09-26 (after patch 0010; before it, AgentiGrid-rewritten ACTIVSg cases lost genfuel and SCOPFLOW failed): on ACTIVSg200 with the shipped contingency file, SCOPFLOW is feasible wherever OPFLOW is (both through x1.6, both fail from x1.7), and the security premium is 0 through x1.3, 0.15% at x1.4, 0.34% at x1.5, 0.64% at x1.6. A 'find the N-1-secure dispatch' goal is attained by the baseline SCOPFLOW solve at every load, so it is replaced by n1cost10 on a frozen x1.5 variant.",
@@ -10,6 +10,7 @@
     "Frozen variants live in rag/tools/specs/cases/ (data/ is git-ignored); written by precheck_cases.py --write-stressed with the fixed MATPOWER writer. The x1.5 SCOPFLOW variant is plain-scaled: OPFLOW/SCOPFLOW re-dispatch, so file set-points are only the initial point. N-1 uses the ExaGO-shipped contingency file with all contingencies (AgentiGrid passes -scopflow_Nc -1); keep exago.mpi_np = 1 (mpi_np > 1 selects EMPAR, which the evaluator rejects).",
     "Goal attainment: cost10 by target_pct; n1cost10 by n1_secure (feasible SCOPFLOW solve with -ctgcfile, -scopflow_Nc -1 and a coupled solver) AND target_pct on the same entry; relieve/voltage by no_violations; loadmax has no attainment predicate. Cost targets are guarded: a reduction does not count when total load is below baseline (0.1% tolerance) or a set_cost_coeffs command is in effect; cost_improvement_pct obeys the same guard and cost_guard_rejections counts rejected entries. A cell whose baseline already attains its goal (baseline_attained=1) measures nothing and must be fixed before analysis.",
     "Cost goals state the guard in the goal text (same wording in every condition), so a guard rejection is an instruction violation and is reported per condition (cost_guard_rejections). Primary metric for cost goals: guarded cost_improvement_pct (continuous; robust to a floor effect if few runs reach 10%); goal_attained at the 10% target is secondary.",
+    "Intent guards (H3): every goal except loadmax declares deterministic goal-constraint checks, stated in its goal text identically in every condition: cost goals load_preserved + no_cost_edits; relieve load_preserved + no_rating_edits + branch_stays_out (case-level, once the outage is chosen); voltage load_preserved + vband_not_widened [0.95, 1.05]. A solve violating one never counts; per run the evaluator reports intent_violation_rate (over executed proposals) and validator_rejection_rate (LLM iterations rejected by the parser/validator, from journal discarded_actions and skipped_commands).",
     "Run from the agentigrid project root with the venv active and OLLAMA_HOST set."
   ],
   "agentigrid_cmd": "agentigrid",
@@ -24,23 +25,22 @@
     {"name": "case39-opflow", "network": "case39", "path": "./data/case39.m", "app": "opflow", "goals": ["cost10", "loadmax"]},
     {"name": "ACTIVSg200-opflow", "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m", "app": "opflow", "goals": ["cost10", "loadmax"]},
     {"name": "ACTIVSg200x1.5-scopflow", "network": "ACTIVSg200", "path": "./rag/tools/specs/cases/case_ACTIVSg200_load1.5.m", "app": "scopflow", "extra_args": ["--ctgc", "../datafiles/case_ACTIVSg200.cont"], "goals": ["n1cost10"]},
-    {"name": "ACTIVSg200-pflow-relieve", "network": "ACTIVSg200", "path": "(pending)", "app": "pflow", "goals": ["relieve"], "pending": "relieve variant must be re-derived with precheck_cases.py --agc: the x1.3 plain-scaled point put the slack unit at ~827 MW, above its 569 MW Pmax"},
+    {"name": "ACTIVSg200-pflow-relieve", "network": "ACTIVSg200", "path": "(pending)", "app": "pflow", "goals": ["relieve"], "pending": "choose the forced outage with precheck_cases.py --outage-scan, freeze it with --write-stressed F --outage FBUS-TBUS[-CKT], set path, and add guards [{\"branch_stays_out\": [FBUS, TBUS, CKT]}] to this case entry"},
     {"name": "ACTIVSg200x0.9-v0.95-pflow", "network": "ACTIVSg200", "path": "./rag/tools/specs/cases/case_ACTIVSg200_load0.9_v0.95-1.05.m", "app": "pflow", "goals": ["voltage"]}
   ],
   "goals": [
-    {"id": "cost10", "text": "Reduce total generation cost by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "target_pct": 10},
+    {"id": "cost10", "text": "Reduce total generation cost by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "target_pct": 10, "guards": ["load_preserved", "no_cost_edits"]},
     {"id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible"},
-    {"id": "n1cost10", "text": "Reduce the total generation cost of the N-1-secure dispatch (secure against all contingencies) by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "success": "n1_secure", "target_pct": 10},
-    {"id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits", "success": "no_violations"},
-    {"id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings", "success": "no_violations"}
+    {"id": "n1cost10", "text": "Reduce the total generation cost of the N-1-secure dispatch (secure against all contingencies) by 10% while serving the same load (reducing or shedding load does not count) and without changing generator cost curves", "success": "n1_secure", "target_pct": 10, "guards": ["load_preserved", "no_cost_edits"]},
+    {"id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits, without shedding load, changing line ratings, or returning the out-of-service branch to service", "success": "no_violations", "guards": ["load_preserved", "no_rating_edits"]},
+    {"id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings, without shedding load or changing the bus voltage limits", "success": "no_violations", "guards": ["load_preserved", {"vband_not_widened": [0.95, 1.05]}]}
   ],
   "conditions": [
     {"id": "C0-norag", "env": {"AGENTIGRID_RAG_MODE": "off"}},
     {"id": "C1-basic", "env": {"AGENTIGRID_RAG_MODE": "basic"}},
     {"id": "C2a-crag-cosine", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine"}},
     {"id": "C2b-crag-reranker", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}},
-    {"id": "C2c-crag-calibrated", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated"}},
-    {"id": "C3-graph", "env": {"AGENTIGRID_RAG_MODE": "graph"}}
+    {"id": "C2c-crag-calibrated", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated"}}
   ],
   "models": [
     {"backend": "ollama", "model": "llama3:latest", "extra_args": []},

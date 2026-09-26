@@ -192,6 +192,10 @@ class SearchJournal:
         self.session_best: Optional[dict] = None
         # load_factor: session-level load scaling factor (updated by set_load_factor action).
         self.load_factor: Optional[float] = None
+        # discarded_actions: iterations whose LLM action recorded no entry --
+        # rejected by the deterministic validator / parser ("rejected") or
+        # discarded after an internal error ("internal"). Evaluation telemetry.
+        self.discarded_actions: list[dict] = []
 
     def update_session_best(
         self,
@@ -1086,6 +1090,8 @@ class SearchJournal:
             data["llm_usage"] = self.llm_usage
         if getattr(self, "rag_config", None) is not None:
             data["rag_config"] = self.rag_config
+        if getattr(self, "discarded_actions", None):
+            data["discarded_actions"] = self.discarded_actions
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         logger.info("Journal exported to %s (%d entries)", path, len(self._entries))
 

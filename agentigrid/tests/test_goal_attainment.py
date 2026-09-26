@@ -42,7 +42,7 @@ def test_cost_target_attained_and_iteration():
     entries = [_solve(0, obj=100.0), _solve(1, obj=95.0), _solve(2, obj=89.0), _solve(3, obj=85.0)]
     a = ev.attainment_for(entries, {"target_pct": 10}, 100.0)
     assert a == {"goal_attained": 1, "baseline_attained": 0, "iterations_to_goal": 2,
-                 "cost_guard_rejections": 0}
+                 "guard_rejections": 0}
 
 
 def test_cost_target_ignores_infeasible_and_non_solve_entries():
@@ -93,7 +93,7 @@ def test_no_violations():
                _solve(2, feasible=True, viol=0), _solve(3, feasible=False, viol=0, status="DID NOT CONVERGE")]
     assert ev.attainment_for(entries, g, None) == {
         "goal_attained": 1, "baseline_attained": 0, "iterations_to_goal": 2,
-        "cost_guard_rejections": None}
+        "guard_rejections": None}
 
 
 def test_multi_call_records_do_not_count():
@@ -107,7 +107,7 @@ def test_multi_call_records_do_not_count():
 def test_goal_without_predicate_is_none():
     assert ev.attainment_for([_solve(1)], {}, 100.0) == {
         "goal_attained": None, "baseline_attained": None, "iterations_to_goal": None,
-        "cost_guard_rejections": None}
+        "guard_rejections": None}
 
 
 def test_unknown_predicate_raises():
@@ -133,6 +133,12 @@ def test_repo_spec_goals_have_valid_predicates():
     assert "success" not in by_id["loadmax"] and "target_pct" not in by_id["loadmax"]
     for g in spec["goals"]:
         assert g.get("success") in (None, *ev.SUCCESS_PREDICATES)
+        ev.goal_guards(g)                      # guard specs parse
+    # every goal with a predicate declares intent guards (H3), and states them in its text
+    for gid in ("cost10", "n1cost10", "relieve", "voltage"):
+        assert by_id[gid]["guards"], gid
+    assert "shedding" in by_id["relieve"]["text"] and "ratings" in by_id["relieve"]["text"]
+    assert "voltage limits" in by_id["voltage"]["text"]
 
 
 # --- t table ------------------------------------------------------------------
@@ -170,7 +176,7 @@ COST10 = {"target_pct": 10}
 def test_load_reduction_does_not_count_as_cost_reduction():
     entries = [_cost(0, 100.0), _cost(1, 85.0, load=900.0, cmds=[{"action": "scale_all_loads", "factor": 0.9}])]
     a = ev.attainment_for(entries, COST10, 100.0)
-    assert a["goal_attained"] == 0 and a["cost_guard_rejections"] == 1
+    assert a["goal_attained"] == 0 and a["guard_rejections"] == 1
 
 
 def test_load_within_tolerance_still_counts():
@@ -183,7 +189,7 @@ def test_cost_curve_edit_is_rejected_and_persists_in_incremental_mode():
                _cost(1, 95.0, cmds=[{"action": "set_cost_coeffs", "bus": 1, "coeffs": [0, 1, 0]}]),
                _cost(2, 85.0, cmds=[{"action": "set_gen_status"}], mode="modify")]
     a = ev.attainment_for(entries, COST10, 100.0)
-    assert a["goal_attained"] == 0 and a["cost_guard_rejections"] == 1
+    assert a["goal_attained"] == 0 and a["guard_rejections"] == 1
 
 
 def test_fresh_entry_drops_earlier_cost_edit():
@@ -215,3 +221,77 @@ def test_n1_cost_goal_needs_security_and_target():
     assert ev.attainment_for([base, secure_dear], goal, 100.0)["goal_attained"] == 0
     assert ev.attainment_for([base, insecure_cheap], goal, 100.0)["goal_attained"] == 0
     assert ev.attainment_for([base, secure_cheap], goal, 100.0)["baseline_attained"] == 0
+
+
+# --- intent guards for localized goals, H3 metrics ---------------------------
+
+RELIEVE = {"success": "no_violations",
+           "guards": ["load_preserved", "no_rating_edits", {"branch_stays_out": [12, 34, 0]}]}
+VOLTAGE = {"success": "no_violations", "guards": ["load_preserved", {"vband_not_widened": [0.95, 1.05]}]}
+
+
+def _pf(it, *, viol=0, cmds=None, load=1000.0, mode="modify"):
+    e = _solve(it, feasible=viol == 0, viol=viol)
+    e.update(total_load_mw=load, mode=mode, commands=cmds if cmds is not None else ([{"action": "set_gen_dispatch"}] if it else []))
+    return e
+
+
+def test_relieve_rejects_rating_edit_and_reclosing_the_outage():
+    base = _pf(0, viol=3)
+    assert ev.attainment_for([base, _pf(1)], RELIEVE, None)["goal_attained"] == 1
+    a = ev.attainment_for([base, _pf(1, cmds=[{"action": "set_branch_rate", "fbus": 1, "tbus": 2, "rateA": 999}])], RELIEVE, None)
+    assert a["goal_attained"] == 0 and a["guard_rejections"] == 1
+    reclose = [{"action": "set_branch_status", "fbus": 34, "tbus": 12, "status": 1}]
+    assert ev.attainment_for([base, _pf(1, cmds=reclose)], RELIEVE, None)["goal_attained"] == 0
+    other = [{"action": "set_branch_status", "fbus": 34, "tbus": 12, "ckt": 1, "status": 1}]
+    assert ev.attainment_for([base, _pf(1, cmds=other)], RELIEVE, None)["goal_attained"] == 1   # a different circuit
+    assert ev.attainment_for([base, _pf(1, load=900.0)], RELIEVE, None)["goal_attained"] == 0   # load shed
+
+
+def test_voltage_band_widening_rejected_but_reasserting_band_allowed():
+    base = _pf(0, viol=6)
+    widen = [{"action": "set_all_bus_vlimits", "Vmin": 0.9, "Vmax": 1.1}]
+    same = [{"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05}, {"action": "set_gen_voltage", "bus": 1, "Vg": 1.0}]
+    assert ev.attainment_for([base, _pf(1, cmds=widen)], VOLTAGE, None)["goal_attained"] == 0
+    assert ev.attainment_for([base, _pf(1, cmds=same)], VOLTAGE, None)["goal_attained"] == 1
+    tight = [{"action": "set_bus_vlimits", "bus": 3, "Vmin": 0.96, "Vmax": 1.04}]
+    assert ev.attainment_for([base, _pf(1, cmds=tight)], VOLTAGE, None)["goal_attained"] == 1
+
+
+def test_intent_metrics_count_executed_proposals_and_per_guard():
+    entries = [_pf(0, viol=3),
+               _pf(1, viol=2, cmds=[{"action": "set_branch_rate", "fbus": 1, "tbus": 2, "rateA": 999}]),
+               _pf(2, viol=0, cmds=[{"action": "set_gen_dispatch"}], mode="fresh"),
+               _pf(3, viol=0, load=800.0)]
+    m = ev.intent_metrics(entries, RELIEVE)
+    assert m["executed_proposals"] == 3 and m["intent_violations"] == 2
+    assert m["intent_violation_rate"] == round(2 / 3, 3)
+    assert m["intent_no_rating_edits"] == 1 and m["intent_load_preserved"] == 1
+    assert m["intent_vband_not_widened"] is None          # not a guard of this goal
+    assert ev.intent_metrics(entries, {"success": "no_violations", "guards": []})["intent_violation_rate"] is None
+
+
+def test_validator_metrics_from_discards_and_skipped_commands():
+    entries = [_pf(0), _pf(1), _pf(2), _pf(4)]
+    entries[2]["skipped_commands"] = ["Invalid command {...}"]
+    journal = {"entries": entries, "discarded_actions": [
+        {"iteration": 3, "kind": "rejected"}, {"iteration": 5, "kind": "internal"}]}
+    m = ev.validator_metrics(journal, entries)
+    assert m["llm_iterations"] == 4                       # 1,2,3,4 (5 internal excluded)
+    assert m["validator_rejections"] == 2                 # 2 partial, 3 discarded
+    assert m["validator_rejection_rate"] == 0.5 and m["discarded_internal"] == 1
+    assert m["has_discard_telemetry"] == 1
+    assert ev.validator_metrics({"entries": entries}, entries)["has_discard_telemetry"] == 0
+
+
+def test_unknown_guard_rejected():
+    with pytest.raises(ValueError):
+        ev.goal_guards({"success": "no_violations", "guards": ["no_such_guard"]})
+
+
+def test_metrics_for_uses_manifest_guards():
+    journal = {"entries": [_pf(0, viol=3), _pf(1, cmds=[{"action": "set_branch_rate", "fbus": 1, "tbus": 2, "rateA": 9}])]}
+    m = ev.metrics_for(journal, {"success": "no_violations", "max_iter": 4, "guards": RELIEVE["guards"]})
+    assert m["goal_attained"] == 0 and m["guard_rejections"] == 1 and m["intent_violations"] == 1
+    m = ev.metrics_for(journal, {"success": "no_violations", "max_iter": 4})   # legacy: no guards
+    assert m["goal_attained"] == 1
