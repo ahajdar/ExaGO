@@ -34,9 +34,13 @@ from pathlib import Path
 NON_SOLVE = frozenset({"ANALYSIS", "COMPLETE", "EXPLORE", "SWEEP", "CONTINGENCY"})
 TERMINAL = NON_SOLVE | {"FAILED"}
 
-# t_{0.975, df} for small samples; falls back to 1.96 for df >= 30.
+# Two-sided 95% Student-t critical values t_{0.975, df} (exact for df 1-30).
+# Between table points the NEXT-LOWER df is used, which is conservative (wider CI).
 _T = {1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571, 6: 2.447, 7: 2.365,
-      8: 2.306, 9: 2.262, 10: 2.228, 12: 2.179, 15: 2.131, 20: 2.086, 25: 2.060}
+      8: 2.306, 9: 2.262, 10: 2.228, 11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145,
+      15: 2.131, 16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086, 21: 2.080,
+      22: 2.074, 23: 2.069, 24: 2.064, 25: 2.060, 26: 2.056, 27: 2.052, 28: 2.048,
+      29: 2.045, 30: 2.042, 40: 2.021, 60: 2.000, 120: 1.980}
 
 
 def t975(df: int) -> float:
@@ -44,10 +48,8 @@ def t975(df: int) -> float:
         return float("nan")
     if df in _T:
         return _T[df]
-    for k in sorted(_T):
-        if df <= k:
-            return _T[k]
-    return 1.96
+    lower = [k for k in _T if k <= df]
+    return _T[max(lower)]
 
 
 def _num(x):
@@ -75,6 +77,97 @@ def base_cost(entries):
         if e.get("feasible") and _num(e.get("objective_value")) is not None:
             return e["objective_value"]
     return None
+
+
+# ---------------------------------------------------------------------------
+# Goal attainment
+# ---------------------------------------------------------------------------
+# A goal declares how success is judged:
+#   * "target_pct": N         -> cost reduction vs. base of at least N percent;
+#   * "success": "n1_secure"  -> a SCOPFLOW solve that converged feasibly with a
+#                                contingency file AND all contingencies selected
+#                                (-scopflow_Nc -1; the ExaGO default of 0 would
+#                                silently solve the base case only);
+#   * "success": "no_violations" -> a solve that converged with no voltage, thermal
+#                                or power-balance violation (journal ``feasible`` is
+#                                True only when violations_count == 0).
+# Goals with neither (e.g. loadmax) have no attainment predicate -> None.
+#
+# Attainment is judged on post-baseline solve entries only: the agent must reach
+# the goal. ``baseline_attained`` reports whether iteration 0 already satisfied
+# it; such a cell measures nothing and must be fixed (stressed variant) rather
+# than analysed. Sweep/explore variants are not counted (single-solve entries only).
+
+SUCCESS_PREDICATES = ("n1_secure", "no_violations")
+
+
+def _argv(e):
+    cmd = e.get("exago_command") or {}
+    argv = cmd.get("argv") if isinstance(cmd, dict) else None
+    return argv if isinstance(argv, list) else []
+
+
+def _application(e):
+    cmd = e.get("exago_command") or {}
+    app = cmd.get("application") if isinstance(cmd, dict) else None
+    if app:
+        return str(app).lower()
+    argv = _argv(e)
+    return Path(argv[0]).name.lower() if argv else ""
+
+
+def all_contingencies_selected(e) -> bool:
+    argv = _argv(e)
+    if "-ctgcfile" not in argv or "-scopflow_Nc" not in argv:
+        return False
+    i = argv.index("-scopflow_Nc")
+    return i + 1 < len(argv) and str(argv[i + 1]).strip() == "-1"
+
+
+def _single_solve(e) -> bool:
+    """A scalar solve entry (not analysis/complete/sweep/explore/failed). Journals
+    written before invocation records existed have no ``exago_command``; they still
+    count here, but cannot satisfy n1_secure, which needs the recorded argv."""
+    if not isinstance(e, dict) or e.get("convergence_status") in TERMINAL:
+        return False
+    cmd = e.get("exago_command")
+    return not (isinstance(cmd, dict) and cmd.get("mode", "single") != "single")
+
+
+def entry_attains(e, goal: dict, base_cost) -> bool:
+    """Does this single journal entry satisfy the goal's success predicate?"""
+    if not _single_solve(e) or not e.get("feasible"):
+        return False
+    success = goal.get("success")
+    if success == "n1_secure":
+        return "scopflow" in _application(e) and all_contingencies_selected(e)
+    if success == "no_violations":
+        return (e.get("violations_count") or 0) == 0
+    target = goal.get("target_pct")
+    if target is not None:
+        obj = _num(e.get("objective_value"))
+        if obj is None or base_cost in (None, 0):
+            return False
+        return (base_cost - obj) / base_cost * 100.0 >= float(target)
+    return False
+
+
+def attainment_for(entries, goal: dict, base_cost) -> dict:
+    """goal_attained / baseline_attained / iterations_to_goal for one run."""
+    if goal.get("success") is None and goal.get("target_pct") is None:
+        return {"goal_attained": None, "baseline_attained": None, "iterations_to_goal": None}
+    if goal.get("success") is not None and goal["success"] not in SUCCESS_PREDICATES:
+        raise ValueError(f"unknown success predicate {goal['success']!r}; "
+                         f"expected one of {SUCCESS_PREDICATES}")
+    dict_entries = [e for e in entries if isinstance(e, dict)]
+    base = [e for e in dict_entries if e.get("iteration", 0) == 0]
+    post = [e for e in dict_entries if e.get("iteration", 0) != 0]
+    hits = sorted(e.get("iteration", 0) for e in post if entry_attains(e, goal, base_cost))
+    return {
+        "goal_attained": int(bool(hits)),
+        "baseline_attained": int(any(entry_attains(e, goal, base_cost) for e in base)),
+        "iterations_to_goal": hits[0] if hits else None,
+    }
 
 
 def has_modification(e):
@@ -105,10 +198,8 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
     valid_rate = round(n_mods / attempts, 3) if attempts else None
 
     any_feasible = any(e.get("feasible") for e in solves)
-    target = manifest.get("target_pct")
-    goal_attained = None
-    if target is not None and improvement is not None:
-        goal_attained = bool(improvement >= float(target))
+    goal = {"target_pct": manifest.get("target_pct"), "success": manifest.get("success")}
+    attain = attainment_for(entries, goal, bc)
 
     elapsed = sum(_num(e.get("elapsed_seconds")) or 0.0 for e in entries)
 
@@ -121,7 +212,7 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         "attempts": attempts,
         "valid_proposal_rate": valid_rate,
         "any_feasible": int(bool(any_feasible)),
-        "goal_attained": (None if goal_attained is None else int(goal_attained)),
+        **attain,
         "iterations_recorded": len(entries),
         "solve_elapsed_s": round(elapsed, 1),
         "rag_enabled": (journal.get("rag_enabled")
@@ -200,8 +291,9 @@ def collect_journals(pattern: str):
 NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "solve_elapsed_s",
            "llm_prompt_tokens", "llm_completion_tokens",
            "llm_cache_creation_tokens", "llm_cache_read_tokens",
-           "n_solve_iters", "wall_s"]
-RATE = ["any_feasible", "goal_attained"]  # averaged as proportions
+           "n_solve_iters", "wall_s",
+           "iterations_to_goal"]  # mean over runs that attained the goal only
+RATE = ["any_feasible", "goal_attained", "baseline_attained"]  # averaged as proportions
 
 
 def summarize(rows):
@@ -278,12 +370,13 @@ def main() -> int:
     print(f"Parsed {len(rows)} runs ({ok} ok). Wrote:")
     print(f"  {out_dir/'per_run.csv'}")
     print(f"  {out_dir/'summary.csv'}")
-    print("\nSummary (valid-proposal rate / cost-improvement %, mean over reps):")
+    print("\nSummary (valid-proposal rate / cost-improvement % / goal attainment, mean over reps):")
     for r in summ:
         vp = r.get("valid_proposal_rate_mean")
         ci = r.get("cost_improvement_pct_mean")
         print(f"  {r['case']:>10} | {r['goal']:<10} | {r['condition']:<10} | {r['model']:<14} "
-              f"| n={r['n_runs']} | valid={vp} | costΔ%={ci} | feas={r.get('any_feasible_rate')}")
+              f"| n={r['n_runs']} | valid={vp} | costΔ%={ci} | feas={r.get('any_feasible_rate')} "
+              f"| attained={r.get('goal_attained_rate')} | baseline_attained={r.get('baseline_attained_rate')}")
     return 0
 
 

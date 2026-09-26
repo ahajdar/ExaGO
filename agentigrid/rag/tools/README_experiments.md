@@ -63,7 +63,13 @@ python rag/tools/experiment_eval.py --journals-glob 'workdir/journal_*.json'
 **Metrics (Tier-A, from the ExaGO oracle — no verifier needed):**
 - `cost_improvement_pct` = (base − best feasible) / base × 100.
 - `valid_proposal_rate` = iterations (past base) that applied a real modification ÷ attempts (`max_iter`). Directly quantifies the flat-iteration failure.
-- `any_feasible`, `goal_attained` (if the goal has `target_pct`), `n_solve_iters`, `solve_elapsed_s`, `wall_s`.
+- `any_feasible`, `n_solve_iters`, `solve_elapsed_s`, `wall_s`, and `llm_*` token counts (all LLM calls, incl. prompt-cache writes/reads).
+- `goal_attained`, `baseline_attained`, `iterations_to_goal` — judged on post-baseline single-solve entries by the goal's predicate:
+  - `target_pct: N` → cost reduction vs. base ≥ N %;
+  - `success: "n1_secure"` → a feasible SCOPFLOW solve whose recorded argv has `-ctgcfile` **and** `-scopflow_Nc -1` (ExaGO's default of 0 silently solves the base case only);
+  - `success: "no_violations"` → a converged solve with no voltage, thermal or power-balance violation;
+  - neither → `None` (e.g. loadmax).
+  `baseline_attained = 1` means iteration 0 already met the goal, so the cell measures nothing — fix the case (stressed variant) before analysis. `iterations_to_goal` is averaged over attaining runs only.
 
 Metric definitions are conservative and documented inline — refine as the study
 matures. The `verifier verdict` (Tier-B, your thesis metric) is **not** computed

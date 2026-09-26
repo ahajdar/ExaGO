@@ -6,6 +6,7 @@
     "case39 carries the economic goals only (no contingency file ships with ExaGO for case39).",
     "ACTIVSg200 files are read from ../datafiles (the ExaGO distribution); N-1 uses its shipped contingency file with all contingencies (AgentiGrid passes -scopflow_Nc -1).",
     "Localized goals (relieve, voltage) run on PFLOW because OPFLOW enforces line ratings and the voltage band as hard constraints. Pre-check pending: if the base PFLOW solve of ACTIVSg200 shows no overload / voltage violation, replace the pflow case path with a frozen stressed variant.",
+    "Goal attainment: cost10 by target_pct; n1 by success=n1_secure (feasible SCOPFLOW solve with -ctgcfile and -scopflow_Nc -1); relieve/voltage by success=no_violations; loadmax has no attainment predicate. A cell whose baseline already attains the goal (baseline_attained=1) measures nothing and must be fixed before analysis.",
     "Run from the agentigrid project root with the venv active and OLLAMA_HOST set."
   ],
   "agentigrid_cmd": "agentigrid",
@@ -30,9 +31,9 @@
   "goals": [
     { "id": "cost10",  "text": "Reduce total generation cost by 10%", "target_pct": 10 },
     { "id": "loadmax", "text": "Find the maximum uniform load scaling factor before the system becomes infeasible" },
-    { "id": "n1",      "text": "Find the minimum cost dispatch that survives all N-1 contingencies" },
-    { "id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits" },
-    { "id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings" }
+    { "id": "n1",      "text": "Find the minimum cost dispatch that survives all N-1 contingencies", "success": "n1_secure" },
+    { "id": "relieve", "text": "Relieve all overloaded transmission lines while keeping bus voltages within their limits", "success": "no_violations" },
+    { "id": "voltage", "text": "Eliminate all bus voltage violations while keeping line loadings within their ratings", "success": "no_violations" }
   ],
   "conditions": [
     { "id": "C0-norag",          "env": { "AGENTIGRID_RAG_MODE": "off" } },
