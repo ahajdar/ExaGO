@@ -877,7 +877,7 @@ def render_live_monitor():
             st.caption(
                 f"k={_cfg.get('k')}, min_score={_cfg.get('min_score')}, "
                 f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
-                f"strip_min={_cfg.get('strip_min_score')}"
+                f"strip_min={_cfg.get('strip_min_score')}, grader={_cfg.get('grader')}"
             )
             
     # 3. Two-column layout
@@ -1190,7 +1190,7 @@ def render_results():
             _details = (
                 f" — k={_cfg.get('k')}, min_score={_cfg.get('min_score')}, "
                 f"τ_lower={_cfg.get('tau_lower')}, τ_upper={_cfg.get('tau_upper')}, "
-                f"strip_min={_cfg.get('strip_min_score')}"
+                f"strip_min={_cfg.get('strip_min_score')}, grader={_cfg.get('grader')}"
             )
         else:
             _details = ""  # basic/off: the fixed defaults aren't worth showing

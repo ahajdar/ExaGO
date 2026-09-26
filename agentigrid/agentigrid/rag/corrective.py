@@ -109,7 +109,21 @@ class CorrectiveRetriever:
             "tau_lower": self.tau_lower,
             "tau_upper": self.tau_upper,
             "strip_min_score": self.strip_min_score,
+            "grader": self._grader_name(),
         }
+
+    def _grader_name(self) -> str:
+        """Name of the active grader: 'cosine' when none is injected, otherwise
+        the grader's own reported name (e.g. 'jev'), or its class name."""
+        if self._grader is None:
+            return "cosine"
+        describe = getattr(self._grader, "describe", None)
+        if callable(describe):
+            try:
+                return describe().get("grader", type(self._grader).__name__)
+            except Exception:
+                return type(self._grader).__name__
+        return getattr(self._grader, "__name__", type(self._grader).__name__)
 
     # -- grading -------------------------------------------------------
     def _scores(self, query: str, hits: list[Hit]) -> list[float]:

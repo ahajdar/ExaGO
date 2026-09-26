@@ -35,6 +35,31 @@ def resolve_rag_mode() -> str:
     return "basic" if os.environ.get("AGENTIGRID_RAG", "0") == "1" else "off"
 
 
+def resolve_crag_grader() -> str:
+    """Return the corrective-RAG grader name from AGENTIGRID_CRAG_GRADER.
+    'cosine' (default/unset) or 'jev'. Unknown values fall back to 'cosine'.
+    """
+    name = os.environ.get("AGENTIGRID_CRAG_GRADER", "").strip().lower()
+    return name if name in ("cosine", "jev") else "cosine"
+
+
+def _make_crag_grader():
+    """Build the optional grader for corrective mode (selected by
+    AGENTIGRID_CRAG_GRADER). 'cosine' -> None (deterministic cosine buckets, the
+    reproducible default). 'jev' -> JevGrader (calibrated System-1 grader; it
+    falls back to cosine internally if the TypeSafe SDK/key is missing). The Jev
+    module is imported lazily so its SDK is only needed when actually requested.
+    """
+    name = resolve_crag_grader()
+    if name == "jev":
+        try:
+            from .grader_jev import JevGrader
+            return JevGrader()
+        except Exception:
+            return None  # degrade to cosine
+    return None  # 'cosine' (and any unknown value already normalized)
+
+
 def build_retriever(**base_kwargs):
     """Construct the retriever for the active mode.
 
@@ -48,8 +73,11 @@ def build_retriever(**base_kwargs):
         return Retriever(enabled=False)
     base = Retriever(enabled=True, **base_kwargs)
     if mode == "corrective":
-        return CorrectiveRetriever(base)
+        return CorrectiveRetriever(base, grader=_make_crag_grader())
     return base  # 'basic' (and any unknown value already normalized to basic)
 
 
-__all__ = ["Retriever", "CorrectiveRetriever", "build_retriever", "resolve_rag_mode"]
+__all__ = [
+    "Retriever", "CorrectiveRetriever", "build_retriever",
+    "resolve_rag_mode", "resolve_crag_grader",
+]
