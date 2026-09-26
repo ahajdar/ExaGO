@@ -222,8 +222,9 @@ def main() -> int:
     ap.add_argument("--init-spec", metavar="PATH", help="write an example spec and exit")
     ap.add_argument("--dry-run", action="store_true", help="print commands, execute nothing")
     ap.add_argument("--skip-unimplemented", action="store_true",
-                    help="drop conditions whose RAG mode / grader is not implemented yet "
-                         "(default: refuse to start, so no run is mislabeled)")
+                    help="drop conditions whose RAG mode / grader is not implemented yet, and "
+                         "case entries marked \"pending\" (default: refuse to start, so no run "
+                         "is mislabeled)")
     args = ap.parse_args()
 
     if args.init_spec:
@@ -249,13 +250,26 @@ def main() -> int:
         conditions = [c for c in conditions if c["id"] not in blocked_ids]
         print(f"Skipping {len(blocked_ids)} condition(s); running {len(conditions)}.\n")
 
+    cases = list(spec["cases"])
+    pending = [(c["name"], c["pending"]) for c in cases if c.get("pending")]
+    if pending:
+        print("Case entries marked pending (not ready for of-record runs):")
+        for name, why in pending:
+            print(f"  - {name}: {why}")
+        if not (args.skip_unimplemented or args.dry_run):
+            print("Refusing to start: resolve them, remove them from the spec, or pass --skip-unimplemented.")
+            return 2
+        pending_names = {n for n, _ in pending}
+        cases = [c for c in cases if c["name"] not in pending_names]
+        print(f"Skipping {len(pending_names)} pending case entr{'y' if len(pending_names) == 1 else 'ies'}.\n")
+
     workdir = (project_root / spec.get("workdir", "workdir"))
     workdir.mkdir(parents=True, exist_ok=True)
     out_dir = (project_root / spec.get("out_dir", "experiments/run1"))
     out_dir.mkdir(parents=True, exist_ok=True)
 
     tasks = []
-    for case in spec["cases"]:
+    for case in cases:
         for goal in goals_for_case(spec, case):
             for cond in conditions:
                 for model in spec["models"]:
@@ -264,7 +278,7 @@ def main() -> int:
 
     n_cells = len({(c["name"], g["id"], k["id"], m["model"]) for c, g, k, m, _ in tasks})
     print(f"{'DRY-RUN: ' if args.dry_run else ''}{len(tasks)} runs "
-          f"({n_cells} cells × {spec.get('reps', 1)} reps; {len(spec['cases'])} case entries, "
+          f"({n_cells} cells × {spec.get('reps', 1)} reps; {len(cases)} case entries, "
           f"{len(conditions)} conditions, {len(spec['models'])} models)")
     print(f"project_root={project_root}\nout_dir={out_dir}\n")
 

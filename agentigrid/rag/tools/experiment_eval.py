@@ -94,6 +94,18 @@ def base_cost(entries):
 #                                or power-balance violation (journal ``feasible`` is
 #                                True only when violations_count == 0).
 # Goals with neither (e.g. loadmax) have no attainment predicate -> None.
+# A goal may declare BOTH (e.g. the N-1 cost goal: n1_secure AND target_pct):
+# then both must hold on the same entry.
+#
+# Cost-target guard (target_pct only). A cost reduction does not count when it
+# comes from changing the problem rather than solving it:
+#   * load reduction -- the entry's total_load_mw is below the baseline's by more
+#     than LOAD_TOL (relative);
+#   * cost-curve edits -- a set_cost_coeffs command is in effect for the entry:
+#     its own commands, plus, for non-"fresh" entries, every command since the
+#     last "fresh" entry (incremental modes build on the current network).
+#     Deliberately conservative: counting a command that a revert later undid
+#     can only produce a false negative, never a false success.
 #
 # Attainment is judged on post-baseline solve entries only: the agent must reach
 # the goal. ``baseline_attained`` reports whether iteration 0 already satisfied
@@ -148,40 +160,101 @@ def _single_solve(e) -> bool:
     return not (isinstance(cmd, dict) and cmd.get("mode", "single") != "single")
 
 
-def entry_attains(e, goal: dict, base_cost) -> bool:
-    """Does this single journal entry satisfy the goal's success predicate?"""
+LOAD_TOL = 1e-3                      # 0.1 % relative
+COST_EDIT_ACTIONS = frozenset({"set_cost_coeffs"})
+
+
+def _actions(cmds) -> list[str]:
+    out = []
+    for c in cmds or []:
+        if isinstance(c, dict):
+            out.append(str(c.get("action", "")).lower())
+    return out
+
+
+def effective_actions(entries, idx: int) -> list[str]:
+    """Actions that may be in effect for entries[idx] (see guard notes above)."""
+    acts: list[str] = []
+    for prev in reversed(entries[: idx + 1]):
+        if not isinstance(prev, dict):
+            continue
+        if prev.get("iteration", 0) == 0:
+            break
+        acts.extend(_actions(prev.get("commands")))
+        if prev.get("mode") == "fresh":
+            break
+    return acts
+
+
+def base_load(entries):
+    for e in entries:
+        if isinstance(e, dict) and e.get("iteration") == 0 and _num(e.get("total_load_mw")) is not None:
+            return e["total_load_mw"]
+    return None
+
+
+def cost_guard_reason(e, actions, base_load_mw) -> str | None:
+    """Why a cost reduction on this entry does not count (None = it counts)."""
+    if COST_EDIT_ACTIONS & set(actions):
+        return "cost_curve_edit"
+    load = _num(e.get("total_load_mw"))
+    if base_load_mw not in (None, 0) and load is not None:
+        if load < base_load_mw * (1.0 - LOAD_TOL):
+            return "load_reduced"
+    return None
+
+
+def entry_attains(e, goal: dict, base_cost, actions=None, base_load_mw=None) -> bool:
+    """Does this single journal entry satisfy the goal's success predicate(s)?"""
     if not _single_solve(e) or not e.get("feasible"):
         return False
     success = goal.get("success")
     if success == "n1_secure":
-        return ("scopflow" in _application(e) and all_contingencies_selected(e)
-                and coupled_scopf_solver(e))
-    if success == "no_violations":
-        return (e.get("violations_count") or 0) == 0
-    target = goal.get("target_pct")
-    if target is not None:
-        obj = _num(e.get("objective_value"))
-        if obj is None or base_cost in (None, 0):
+        if not ("scopflow" in _application(e) and all_contingencies_selected(e)
+                and coupled_scopf_solver(e)):
             return False
-        return (base_cost - obj) / base_cost * 100.0 >= float(target)
-    return False
+    elif success == "no_violations":
+        if (e.get("violations_count") or 0) != 0:
+            return False
+    target = goal.get("target_pct")
+    if target is None:
+        return success is not None
+    obj = _num(e.get("objective_value"))
+    if obj is None or base_cost in (None, 0):
+        return False
+    if cost_guard_reason(e, actions or [], base_load_mw) is not None:
+        return False
+    return (base_cost - obj) / base_cost * 100.0 >= float(target)
 
 
 def attainment_for(entries, goal: dict, base_cost) -> dict:
     """goal_attained / baseline_attained / iterations_to_goal for one run."""
     if goal.get("success") is None and goal.get("target_pct") is None:
-        return {"goal_attained": None, "baseline_attained": None, "iterations_to_goal": None}
+        return {"goal_attained": None, "baseline_attained": None, "iterations_to_goal": None,
+                "cost_guard_rejections": None}
     if goal.get("success") is not None and goal["success"] not in SUCCESS_PREDICATES:
         raise ValueError(f"unknown success predicate {goal['success']!r}; "
                          f"expected one of {SUCCESS_PREDICATES}")
     dict_entries = [e for e in entries if isinstance(e, dict)]
-    base = [e for e in dict_entries if e.get("iteration", 0) == 0]
-    post = [e for e in dict_entries if e.get("iteration", 0) != 0]
-    hits = sorted(e.get("iteration", 0) for e in post if entry_attains(e, goal, base_cost))
+    bl = base_load(dict_entries)
+    hits, base_hit, guarded = [], False, 0
+    for i, e in enumerate(dict_entries):
+        acts = effective_actions(dict_entries, i)
+        ok = entry_attains(e, goal, base_cost, acts, bl)
+        if e.get("iteration", 0) == 0:
+            base_hit = base_hit or ok
+            continue
+        if ok:
+            hits.append(e.get("iteration", 0))
+        elif (goal.get("target_pct") is not None
+              and entry_attains(e, goal, base_cost, [], None)):
+            guarded += 1          # would have counted without the cost guard
+    hits.sort()
     return {
         "goal_attained": int(bool(hits)),
-        "baseline_attained": int(any(entry_attains(e, goal, base_cost) for e in base)),
+        "baseline_attained": int(base_hit),
         "iterations_to_goal": hits[0] if hits else None,
+        "cost_guard_rejections": guarded if goal.get("target_pct") is not None else None,
     }
 
 
@@ -196,10 +269,21 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
     non_base = [e for e in solves if e.get("iteration", 0) != 0]
 
     bc = base_cost(entries)
-    feasible_costs = [e["objective_value"] for e in solves
-                      if e.get("feasible") and _num(e.get("objective_value")) is not None]
+    goal = {"target_pct": manifest.get("target_pct"), "success": manifest.get("success")}
+    cost_goal = goal["target_pct"] is not None
+    dict_entries = [e for e in entries if isinstance(e, dict)]
+    bl = base_load(dict_entries)
+    solve_ids = {id(e) for e in solves}
+    feasible_costs = []
+    for i, e in enumerate(dict_entries):
+        if id(e) not in solve_ids or not e.get("feasible") or _num(e.get("objective_value")) is None:
+            continue
+        # For cost goals the reported improvement obeys the same guard as attainment.
+        if cost_goal and cost_guard_reason(e, effective_actions(dict_entries, i), bl):
+            continue
+        feasible_costs.append(e["objective_value"])
     best = min(feasible_costs) if feasible_costs else None
-    if best is None:
+    if best is None and not cost_goal:
         sb = journal.get("session_best") if isinstance(journal, dict) else None
         if isinstance(sb, dict) and _num(sb.get("cost")) is not None:
             best = sb["cost"]
@@ -213,7 +297,6 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
     valid_rate = round(n_mods / attempts, 3) if attempts else None
 
     any_feasible = any(e.get("feasible") for e in solves)
-    goal = {"target_pct": manifest.get("target_pct"), "success": manifest.get("success")}
     attain = attainment_for(entries, goal, bc)
 
     elapsed = sum(_num(e.get("elapsed_seconds")) or 0.0 for e in entries)

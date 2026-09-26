@@ -130,3 +130,34 @@ def test_reranker_gated_on_library(monkeypatch):
     assert "sentence-transformers" in runner.unimplemented_reason(cond)
     monkeypatch.setattr(gr, "reranker_available", lambda: True)
     assert runner.unimplemented_reason(cond) is None
+
+
+def test_pending_case_refused_unless_skipped(monkeypatch, tmp_path, capsys):
+    p = _write_spec(tmp_path, [{"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}}])
+    spec = json.loads(p.read_text())
+    spec["cases"][1]["pending"] = "voltage band not checked"
+    p.write_text(json.dumps(spec))
+    assert _run_main(monkeypatch, tmp_path, ["--spec", str(p)]) == 2
+    assert "pending" in capsys.readouterr().out
+    assert _run_main(monkeypatch, tmp_path, ["--spec", str(p), "--dry-run"]) == 0
+    assert "4 runs" in capsys.readouterr().out   # only c39's 2 goals x 2 reps
+
+
+def test_frozen_spec_cases_exist_and_keep_genfuel():
+    """Frozen variants must be present, scaled as named, and readable by ExaGO
+    (genfuel closed by '};' -- see test_matpower_cell_terminators)."""
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    spec = json.loads((ROOT / "grader_ablation_spec.json").read_text())
+    base = ROOT.parent / "datafiles" / "case_ACTIVSg200.m"
+    if not base.exists():
+        pytest.skip("ExaGO datafiles not present")
+    pd0 = sum(b.Pd for b in parse_matpower(base).buses)
+    frozen = [c for c in spec["cases"] if "specs/cases/" in c["path"]]
+    assert frozen
+    for c in frozen:
+        path = (ROOT / c["path"]).resolve()
+        assert path.exists(), path
+        scale = float(path.stem.split("_load")[1].split("_")[0])
+        assert abs(sum(b.Pd for b in parse_matpower(path).buses) - scale * pd0) < 1e-6 * pd0
+        text = path.read_text()
+        assert "mpc.genfuel" in text and "\n};" in text.split("mpc.genfuel", 1)[1]
