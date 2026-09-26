@@ -87,3 +87,15 @@ def test_write_stressed_with_voltage_band(tmp_path):
     out = pc.write_stressed(case, 1.1, tmp_path, (0.95, 1.05))
     assert out.name == "case9mod_load1.1_v0.95-1.05.m"
     assert {(b.Vmin, b.Vmax) for b in parse_matpower(out).buses} == {(0.95, 1.05)}
+
+
+def test_marginal_scopflow_is_undetermined():
+    """Regression: SCOPFLOW that stopped at IPOPT's iteration limit ('marginal')
+    is not evidence of N-1 insecurity and must not yield 'n1 OK'."""
+    marginal = {"parsed": True, "converged": False, "feasibility": "marginal", "num_violations": 0}
+    r = {1.0: {"opflow": _rec(), "scopflow": marginal, "pflow": _rec()}}
+    v = pc.classify(r)
+    assert v["n1"]["verdict"].startswith("UNDETERMINED")
+    proven = {"parsed": True, "converged": False, "feasibility": "infeasible", "num_violations": 0}
+    r = {1.0: {"opflow": _rec(), "scopflow": proven, "pflow": _rec()}}
+    assert pc.classify(r)["n1"]["meaningful_at_base"] is True

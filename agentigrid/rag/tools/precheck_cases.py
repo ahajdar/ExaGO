@@ -64,6 +64,7 @@ def summarize_result(res, sim) -> dict:
         "converged": bool(res.converged),
         "status": res.convergence_status,
         "feasibility": res.feasibility_detail,
+        "ipopt_exit": getattr(res, "ipopt_exit_status", "") or "",
         "objective": res.objective_value,
         "num_violations": res.num_violations,
         "max_line_loading_pct": round(res.max_line_loading_pct, 2),
@@ -99,7 +100,15 @@ def check_goal(goal: str, r: dict[str, dict]):
         o, sc = r.get("opflow"), r.get("scopflow")
         if not (_ran(o) and _ran(sc)):
             return None
-        return _feasible(o) and not _feasible(sc)
+        if not _feasible(o):
+            return False            # base infeasibility, not an N-1 problem
+        if _feasible(sc):
+            return False            # SCOPFLOW already solves the goal
+        if sc.get("feasibility") == "marginal":
+            # IPOPT stopped without a verdict (iteration limit, tiny steps, ...):
+            # that is not evidence that no N-1-secure dispatch exists.
+            return None
+        return True
     p = r.get("pflow")
     if not _ran(p):
         return None
@@ -196,9 +205,12 @@ def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, 
                   f"feas={rec.get('feasibility')!s:<10} viol(V/T)={rec.get('voltage_violations','-')}/"
                   f"{rec.get('thermal_violations','-')}  maxload={rec.get('max_line_loading_pct','-')}%  "
                   f"V=[{rec.get('voltage_min','-')},{rec.get('voltage_max','-')}]  "
-                  f"obj={rec.get('objective')}  ({rec.get('elapsed_s')}s)")
+                  f"obj={rec.get('objective')}  ({rec.get('elapsed_s')}s)"
+                  + (f"  ipopt={rec['ipopt_exit']!r}" if rec.get("ipopt_exit") and not rec.get("converged") else ""))
             if not rec.get("parsed"):
                 print(f"           error: {str(rec.get('error') or 'no output').strip()[:300]}")
+            if rec.get("ipopt_exit"):
+                print(f"           ipopt: {rec['ipopt_exit']}")
     return results
 
 
