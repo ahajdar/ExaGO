@@ -161,3 +161,9 @@ def test_frozen_spec_cases_exist_and_keep_genfuel():
         assert abs(sum(b.Pd for b in parse_matpower(path).buses) - scale * pd0) < 1e-6 * pd0
         text = path.read_text()
         assert "mpc.genfuel" in text and "\n};" in text.split("mpc.genfuel", 1)[1]
+        net = parse_matpower(path)
+        if "_out" in path.stem:                  # forced-outage variant: branch out, guard declared
+            f, t = (int(x) for x in path.stem.split("_out")[1].split("-")[:2])
+            assert [b.status for b in net.branches if {b.fbus, b.tbus} == {f, t}] == [0]
+            assert {"branch_stays_out": [f, t, 0]} in c.get("guards", [])
+    assert not [c for c in spec["cases"] if c.get("pending")], "all case entries resolved"
