@@ -41,6 +41,6 @@
     {"id": "C0-norag", "env": {"AGENTIGRID_RAG_MODE": "off"}}
   ],
   "models": [
-    {"backend": "anthropic", "model": "<opus-model-id>", "extra_args": []}
+    {"backend": "anthropic", "model": "claude-sonnet-5", "extra_args": []}
   ]
 }
