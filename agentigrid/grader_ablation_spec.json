@@ -1,8 +1,8 @@
 {
   "notes": [
-    "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b/c. Graph RAG (formerly C3) is out of scope for this paper (planned follow-up).",
-    "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only). C2c (reranker_calibrated) is not implemented yet; the runner refuses it unless --skip-unimplemented is passed.",
-    "C2c is gated: run it only if C2b beats C2a (paper H4).",
+    "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b (C2c is offline-only). Graph RAG (formerly C3) is out of scope for this paper (planned follow-up).",
+    "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs (rag/tools/relevance_labels.py fit) and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only).",
+    "C2c (Platt-calibrated reranker) is evaluated OFFLINE only (Amir, 2026-09-28): AUC and ECE of calibrated probabilities on held-out labels (rag/tools/relevance_labels.py fit). No C2c agent runs: calibration is monotone, so with thresholds fitted by the same rule C2c would make exactly C2b's grading decisions and its runs would duplicate C2b's.",
     "case39 carries the economic goals only (no contingency file ships with ExaGO for case39).",
     "Pre-check 2026-09-26 (after patch 0010; before it, AgentiGrid-rewritten ACTIVSg cases lost genfuel and SCOPFLOW failed): on ACTIVSg200 with the shipped contingency file, SCOPFLOW is feasible wherever OPFLOW is (both through x1.6, both fail from x1.7), and the security premium is 0 through x1.3, 0.15% at x1.4, 0.34% at x1.5, 0.64% at x1.6. A 'find the N-1-secure dispatch' goal is attained by the baseline SCOPFLOW solve at every load, so it is replaced by n1cost10 on a frozen x1.5 variant.",
     "Localized goals run on PFLOW because OPFLOW enforces line ratings and the voltage band as hard constraints. PFLOW keeps every set-point from the file, so with plain load scaling the slack unit (bus 189, Pmin 170.75, Pmax 569.15 MW) absorbs the whole change; that is physical only between about x0.86 and x1.12 on ACTIVSg200. Outside that range the variant must be written with --agc (change shared among online non-slack units in proportion to Pmax; wind curtailable, not raisable).",
@@ -41,8 +41,7 @@
     {"id": "C0-norag", "env": {"AGENTIGRID_RAG_MODE": "off"}},
     {"id": "C1-basic", "env": {"AGENTIGRID_RAG_MODE": "basic"}},
     {"id": "C2a-crag-cosine", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine"}},
-    {"id": "C2b-crag-reranker", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}},
-    {"id": "C2c-crag-calibrated", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker_calibrated"}}
+    {"id": "C2b-crag-reranker", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}}
   ],
   "models": [
     {"backend": "ollama", "model": "llama3:latest", "extra_args": []},
