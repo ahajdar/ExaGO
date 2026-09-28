@@ -1,5 +1,7 @@
 # Phase-0 experiment harness
 
+> Running the of-record ablation on the frozen corpus (setup, pilot, evaluation, gotchas): see [EVALUATION_RUNBOOK.md](EVALUATION_RUNBOOK.md).
+
 Two dependency-free scripts (stdlib only) that run and measure the RAG comparison.
 They change nothing about AgentiGrid — they orchestrate repeated CLI runs and
 aggregate the journal JSONs each run already exports.
