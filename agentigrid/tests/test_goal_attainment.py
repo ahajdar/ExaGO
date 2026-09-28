@@ -133,12 +133,20 @@ def test_repo_spec_goals_have_valid_predicates():
     assert "success" not in by_id["loadmax"] and "target_pct" not in by_id["loadmax"]
     for g in spec["goals"]:
         assert g.get("success") in (None, *ev.SUCCESS_PREDICATES)
-        ev.goal_guards(g)                      # guard specs parse
+        resolved = [({"vband_not_widened": [0.9, 1.1]} if x == {"vband_not_widened": "case"} else x)
+                    for x in (g.get("guards") or [])]
+        ev.goal_guards({**g, "guards": resolved})   # guard specs parse once 'case' is resolved
     # every goal with a predicate declares intent guards (H3), and states them in its text
     for gid in ("cost10", "n1cost10", "relieve", "voltage"):
         assert by_id[gid]["guards"], gid
     assert "shedding" in by_id["relieve"]["text"] and "ratings" in by_id["relieve"]["text"]
     assert "voltage limits" in by_id["voltage"]["text"]
+    # relaxed operating limits are not cost savings
+    for gid in ("cost10", "n1cost10"):
+        assert {"vband_not_widened": "case"} in by_id[gid]["guards"] and "no_rating_edits" in by_id[gid]["guards"]
+        assert "voltage limits or line ratings" in by_id[gid]["text"]
+    with pytest.raises(ValueError):
+        ev.goal_guards({"success": "no_violations", "guards": [{"vband_not_widened": "case"}]})
 
 
 # --- t table ------------------------------------------------------------------

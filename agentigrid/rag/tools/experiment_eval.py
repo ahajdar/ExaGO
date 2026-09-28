@@ -213,6 +213,9 @@ def normalize_guards(guards) -> list[tuple[str, object]]:
             raise ValueError(f"bad guard spec {g!r}")
         if name not in GUARD_NAMES:
             raise ValueError(f"unknown guard {name!r}; expected one of {GUARD_NAMES}")
+        if name == "vband_not_widened" and not (isinstance(arg, (list, tuple)) and len(arg) == 2):
+            raise ValueError(f"vband_not_widened needs [lo, hi] (got {arg!r}); the runner resolves "
+                             "'case' from the case file")
         out.append((name, arg))
     return out
 
