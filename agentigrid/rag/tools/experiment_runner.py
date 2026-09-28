@@ -187,6 +187,24 @@ def llm_failure(journal_path) -> str | None:
     return None
 
 
+def resolve_guards(guards, case_path, project_root: Path):
+    """Resolve symbolic guard arguments against the case file. Currently:
+    {"vband_not_widened": "case"} -> [min Vmin, max Vmax] of the case's buses,
+    i.e. the voltage band the case itself defines."""
+    if guards is None:
+        return None
+    out = []
+    for g in guards:
+        if isinstance(g, dict) and g.get("vband_not_widened") == "case":
+            from agentigrid.parsers.matpower_parser import parse_matpower
+            path = Path(case_path)
+            path = path if path.is_absolute() else project_root / path
+            net = parse_matpower(path)
+            g = {"vband_not_widened": [min(b.Vmin for b in net.buses), max(b.Vmax for b in net.buses)]}
+        out.append(g)
+    return out
+
+
 def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, dry):
     run_id = "__".join([
         sanitize(case["name"]), sanitize(goal["id"]), sanitize(cond["id"]),
@@ -216,8 +234,12 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
         "goal_id": goal["id"], "goal_text": goal["text"], "target_pct": goal.get("target_pct"),
         "success": goal.get("success"),
         # None (neither declares guards) lets the evaluator apply its defaults.
-        "guards": (None if goal.get("guards") is None and case.get("guards") is None
-                   else list(goal.get("guards") or []) + list(case.get("guards") or [])),
+        "guards": resolve_guards(
+            None if goal.get("guards") is None and case.get("guards") is None
+            else list(goal.get("guards") or []) + list(case.get("guards") or []),
+            case["path"], project_root) if not dry else
+            (None if goal.get("guards") is None and case.get("guards") is None
+             else list(goal.get("guards") or []) + list(case.get("guards") or [])),
         "condition": cond["id"], "condition_env": cond.get("env", {}),
         "corpus": cond.get("_corpus_status"),
         "backend": model["backend"], "model": model["model"],

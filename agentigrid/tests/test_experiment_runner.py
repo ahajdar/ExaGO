@@ -205,3 +205,10 @@ def test_llm_failure_detects_runs_with_no_successful_llm_call(tmp_path):
                              "llm_usage": {"calls": 3, "prompt_tokens": 900, "completion_tokens": 50}}))
     assert runner.llm_failure(j) is None
     assert runner.llm_failure(None) is None
+
+
+def test_case_voltage_band_guard_resolves_from_case_file():
+    g = runner.resolve_guards(["load_preserved", {"vband_not_widened": "case"}],
+                              ROOT.parent / "datafiles" / "case118.m", ROOT)
+    assert g == ["load_preserved", {"vband_not_widened": [0.94, 1.06]}]
+    assert runner.resolve_guards(None, "x.m", ROOT) is None

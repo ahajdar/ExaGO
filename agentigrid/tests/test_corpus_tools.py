@@ -187,7 +187,7 @@ def test_scraper_drops_intent_violations(tmp_path):
     assert scrape.main(["--runs-dir", str(tmp_path / "runs"), "--out", str(out),
                         "--exclude-spec", str(EVAL_SPEC)]) == 0
     text = (out / scrape.OUT_NAME).read_text()
-    assert text.count("[source:") == 1 and "Lower setpoint" in text
+    assert text.count("[source:") == 1 and "set_gen_voltage(bus=10, Vg=1)" in text
 
 
 def test_bootstrap_goals_declare_guards_and_model_is_outside_eval_set():
@@ -212,3 +212,35 @@ def test_corpus_status_tracks_freeze_and_ingest(tmp_path):
     assert st["ok"] and st["corpus_sha256"] == digest
     (corpus / "a.txt").write_text("alpha changed")
     assert "changed since it was frozen" in corpus_status(corpus, store)["reason"]
+
+
+def test_exemplar_carries_no_model_rationale():
+    """The solver certifies results, not explanations: a certified step with a
+    false rationale must not put that rationale into the corpus."""
+    cmds = [{"action": "set_gen_status", "bus": b, "status": 1} for b in (435, 436, 264)]
+    e = _entry(skipped=[], cmds=cmds, desc="Commit zero-cost offline generators")
+    e["llm_reasoning"] = "these generators have zero-cost curves"
+    text = scrape.exemplar_text(e, {"model": "m", "goal_text": "g", "_base_objective": 200.0})
+    assert "zero-cost" not in text and "Reasoning" not in text
+    assert "set_gen_status x3 on buses 435, 436, 264 (status=1)" in text
+    assert '"description": "set_gen_status x3' in text
+    assert "(-50.0% vs. base 200.00)" in text
+
+
+def test_guards_spec_override_filters_older_runs(tmp_path):
+    run = tmp_path / "runs" / "r1"
+    run.mkdir(parents=True)
+    base = _entry(it=0, skipped=[]); base["total_load_mw"] = 100.0
+    widen = _entry(it=1, skipped=[], cmds=[{"action": "set_all_bus_vlimits", "Vmin": 0.94, "Vmax": 1.1}])
+    widen["total_load_mw"] = 100.0
+    (run / "journal.json").write_text(json.dumps({"entries": [base, widen]}))
+    (run / "manifest.json").write_text(json.dumps({"model": "m", "goal_id": "cost5", "case": "c118",
+        "goal_text": "g", "case_path": "x/case118.m", "target_pct": 5, "guards": ["load_preserved"]}))
+    spec = tmp_path / "spec.json"
+    spec.write_text(json.dumps({"project_root": str(ROOT),
+        "goals": [{"id": "cost5", "text": "g", "guards": ["load_preserved", {"vband_not_widened": "case"}]}],
+        "cases": [{"name": "c118", "path": str(ROOT.parent / "datafiles" / "case118.m")}]}))
+    out = tmp_path / "corpus"
+    args = ["--runs-dir", str(tmp_path / "runs"), "--out", str(out), "--no-exclude"]
+    assert scrape.main(args) == 0                       # recorded guards: widening allowed
+    assert scrape.main(args + ["--guards-spec", str(spec)]) == 1   # re-derived: widening rejected
