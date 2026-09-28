@@ -110,6 +110,8 @@ class CorrectiveRetriever:
             "enabled": self.enabled,
             "k": self.k,
             "min_score": getattr(self._base, "min_score", None),
+            "store_path": getattr(self._base, "store_path", None),
+            "collection": getattr(self._base, "collection", None),
             "tau_lower": self.tau_lower,
             "tau_upper": self.tau_upper,
             "strip_min_score": self.strip_min_score,

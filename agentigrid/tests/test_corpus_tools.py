@@ -161,3 +161,54 @@ def test_journal_roundtrips_skipped_commands(tmp_path):
     out = tmp_path / "j.json"
     j.export_json(out)
     assert json.loads(out.read_text())["entries"][0]["skipped_commands"] == ["Skipped x"]
+
+
+# --- intent guards in the scraper, frozen-corpus identity ------------------------
+
+def test_scraper_drops_intent_violations(tmp_path):
+    run = tmp_path / "runs" / "r1"
+    run.mkdir(parents=True)
+    base = _entry(it=0, skipped=[])
+    base["total_load_mw"] = 1000.0
+    widen = _entry(it=1, skipped=[], cmds=[{"action": "set_all_bus_vlimits", "Vmin": 0.9, "Vmax": 1.1}],
+                   desc="Relax the voltage band")
+    widen["total_load_mw"] = 1000.0
+    shed = _entry(it=2, skipped=[], cmds=[{"action": "scale_all_loads", "factor": 0.9}], desc="Shed load", )
+    shed["total_load_mw"] = 900.0
+    shed["mode"] = "fresh"
+    ok = _entry(it=3, skipped=[], cmds=[{"action": "set_gen_voltage", "bus": 10, "Vg": 1.0}], desc="Lower setpoint")
+    ok["total_load_mw"] = 1000.0
+    ok["mode"] = "fresh"
+    (run / "journal.json").write_text(json.dumps({"entries": [base, widen, shed, ok]}))
+    (run / "manifest.json").write_text(json.dumps({
+        "model": "m", "goal_text": "g", "case_path": "x/case118.m", "success": "no_violations",
+        "guards": ["load_preserved", {"vband_not_widened": [0.95, 1.05]}]}))
+    out = tmp_path / "corpus"
+    assert scrape.main(["--runs-dir", str(tmp_path / "runs"), "--out", str(out),
+                        "--exclude-spec", str(EVAL_SPEC)]) == 0
+    text = (out / scrape.OUT_NAME).read_text()
+    assert text.count("[source:") == 1 and "Lower setpoint" in text
+
+
+def test_bootstrap_goals_declare_guards_and_model_is_outside_eval_set():
+    boot = json.loads(BOOT_SPEC.read_text())
+    ev = json.loads(EVAL_SPEC.read_text())
+    assert all("guards" in g for g in boot["goals"])
+    eval_models = {m["model"] for m in ev["models"]}
+    assert not {m["model"] for m in boot["models"]} & eval_models
+
+
+def test_corpus_status_tracks_freeze_and_ingest(tmp_path):
+    from agentigrid.rag.corpus_hash import INGEST_MANIFEST_NAME, corpus_hash, corpus_status
+    corpus, store = tmp_path / "corpus", tmp_path / "store"
+    corpus.mkdir(); store.mkdir()
+    (corpus / "a.txt").write_text("alpha")
+    assert "not frozen" in corpus_status(corpus, store)["reason"]
+    assert guard.main([str(corpus), "--freeze"]) == 0
+    assert "store not built" in corpus_status(corpus, store)["reason"]
+    digest, _ = corpus_hash(corpus)
+    (store / INGEST_MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest}))
+    st = corpus_status(corpus, store)
+    assert st["ok"] and st["corpus_sha256"] == digest
+    (corpus / "a.txt").write_text("alpha changed")
+    assert "changed since it was frozen" in corpus_status(corpus, store)["reason"]

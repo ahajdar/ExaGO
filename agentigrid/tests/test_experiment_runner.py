@@ -167,3 +167,30 @@ def test_frozen_spec_cases_exist_and_keep_genfuel():
             assert [b.status for b in net.branches if {b.fbus, b.tbus} == {f, t}] == [0]
             assert {"branch_stays_out": [f, t, 0]} in c.get("guards", [])
     assert not [c for c in spec["cases"] if c.get("pending")], "all case entries resolved"
+
+
+def test_retrieval_conditions_need_frozen_corpus(monkeypatch, tmp_path, capsys):
+    p = _write_spec(tmp_path, [{"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}},
+                               {"id": "C1", "env": {"AGENTIGRID_RAG_MODE": "basic"}}])
+    assert _run_main(monkeypatch, tmp_path, ["--spec", str(p)]) == 2
+    assert "not frozen" in capsys.readouterr().out
+    assert runner.corpus_check({"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}}, tmp_path) is None
+
+
+def test_placeholder_model_refused(monkeypatch, tmp_path, capsys):
+    p = _write_spec(tmp_path, [{"id": "C0", "env": {"AGENTIGRID_RAG_MODE": "off"}}])
+    spec = json.loads(p.read_text())
+    spec["models"] = [{"backend": "anthropic", "model": "<opus-model-id>", "extra_args": []}]
+    p.write_text(json.dumps(spec))
+    assert _run_main(monkeypatch, tmp_path, ["--spec", str(p)]) == 2
+    assert "placeholder" in capsys.readouterr().out
+
+
+def test_store_env_selects_corpus_store(monkeypatch):
+    import agentigrid.rag as rag
+    monkeypatch.setenv("AGENTIGRID_RAG_MODE", "basic")
+    monkeypatch.setenv("AGENTIGRID_RAG_STORE", "rag/store_docs")
+    monkeypatch.setenv("AGENTIGRID_RAG_COLLECTION", "docs_kb")
+    r = rag.build_retriever(host="http://localhost:1")
+    d = r.describe()
+    assert d["store_path"] == "rag/store_docs" and d["collection"] == "docs_kb"

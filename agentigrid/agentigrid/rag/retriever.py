@@ -29,6 +29,8 @@ class Retriever:
         self.enabled = enabled
         self.k = k
         self.min_score = min_score
+        self.store_path = path
+        self.collection = collection
         self._store = None
         if enabled:
             try:
@@ -68,6 +70,8 @@ class Retriever:
             "enabled": self.enabled,
             "k": self.k,
             "min_score": self.min_score,
+            "store_path": self.store_path,
+            "collection": self.collection,
         }
 
     def query_hits(self, query: str, k: Optional[int] = None) -> list[tuple[str, dict, float]]:

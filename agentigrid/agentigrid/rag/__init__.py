@@ -96,6 +96,12 @@ def build_retriever(**base_kwargs):
     """
     mode = resolve_rag_mode()
     base_kwargs.pop("enabled", None)
+    # Corpus selection per experiment condition (e.g. core vs. documentation-
+    # augmented corpus): each corpus is ingested into its own store directory.
+    if os.environ.get("AGENTIGRID_RAG_STORE"):
+        base_kwargs["path"] = os.environ["AGENTIGRID_RAG_STORE"]
+    if os.environ.get("AGENTIGRID_RAG_COLLECTION"):
+        base_kwargs["collection"] = os.environ["AGENTIGRID_RAG_COLLECTION"]
     if mode == "off":
         return Retriever(enabled=False)
     base = Retriever(enabled=True, **base_kwargs)

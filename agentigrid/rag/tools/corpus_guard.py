@@ -92,19 +92,14 @@ def audit_text(text: str, holdout: dict) -> list[dict]:
 
 
 def corpus_files(corpus_dir: Path) -> list[Path]:
-    return sorted(p for p in corpus_dir.rglob("*")
-                  if p.is_file() and p.suffix in CORPUS_SUFFIXES and p.name != MANIFEST_NAME)
+    from agentigrid.rag.corpus_hash import corpus_files as _cf
+    return _cf(corpus_dir)
 
 
 def corpus_hash(corpus_dir: Path) -> tuple[str, dict[str, str]]:
-    """Overall SHA-256 over (relative path, content hash) pairs, order-independent of disk."""
-    per_file = {}
-    for p in corpus_files(corpus_dir):
-        per_file[p.relative_to(corpus_dir).as_posix()] = hashlib.sha256(p.read_bytes()).hexdigest()
-    h = hashlib.sha256()
-    for rel in sorted(per_file):
-        h.update(f"{rel}\0{per_file[rel]}\n".encode())
-    return h.hexdigest(), per_file
+    """Overall SHA-256 over (relative path, content hash) pairs (shared definition)."""
+    from agentigrid.rag.corpus_hash import corpus_hash as _ch
+    return _ch(corpus_dir)
 
 
 def main(argv: list[str] | None = None) -> int:

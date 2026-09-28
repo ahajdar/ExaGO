@@ -59,3 +59,12 @@ class VectorStore:
 
     def count(self) -> int:
         return self._col.count()
+
+    def reset(self) -> None:
+        """Drop and recreate the collection (a fresh index, no stale chunks)."""
+        name = self._col.name
+        try:
+            self._client.delete_collection(name)
+        except Exception:
+            pass
+        self._col = self._client.get_or_create_collection(name, metadata={"hnsw:space": "cosine"})

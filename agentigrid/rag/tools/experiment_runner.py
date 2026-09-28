@@ -141,6 +141,31 @@ def newest_new_journal(workdir: Path, before: set[str]) -> Path | None:
     return max(fresh, key=lambda p: p.stat().st_mtime)
 
 
+def retrieval_active(cond) -> bool:
+    env = cond.get("env", {})
+    mode = str(env.get("AGENTIGRID_RAG_MODE", "")).strip().lower()
+    if mode:
+        return mode != "off"
+    return str(env.get("AGENTIGRID_RAG", "0")) == "1"
+
+
+def corpus_check(cond, project_root: Path) -> dict | None:
+    """Frozen-corpus status for a retrieval-active condition (None for C0).
+    The corpus dir comes from the condition's "corpus" key (default rag/corpus),
+    the store from AGENTIGRID_RAG_STORE (default rag/store)."""
+    if not retrieval_active(cond):
+        return None
+    from agentigrid.rag.corpus_hash import corpus_status
+    corpus = project_root / cond.get("corpus", "rag/corpus")
+    store = project_root / cond.get("env", {}).get("AGENTIGRID_RAG_STORE", "rag/store")
+    return corpus_status(corpus, store)
+
+
+def placeholder_model(model) -> bool:
+    m = str(model.get("model", ""))
+    return "<" in m or ">" in m or not m.strip()
+
+
 def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, dry):
     run_id = "__".join([
         sanitize(case["name"]), sanitize(goal["id"]), sanitize(cond["id"]),
@@ -173,6 +198,7 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
         "guards": (None if goal.get("guards") is None and case.get("guards") is None
                    else list(goal.get("guards") or []) + list(case.get("guards") or [])),
         "condition": cond["id"], "condition_env": cond.get("env", {}),
+        "corpus": cond.get("_corpus_status"),
         "backend": model["backend"], "model": model["model"],
         "max_iter": spec.get("max_iter", 4), "rep": rep,
         "cmd": cmd, "cwd": str(project_root),
@@ -228,6 +254,9 @@ def main() -> int:
                     help="drop conditions whose RAG mode / grader is not implemented yet, and "
                          "case entries marked \"pending\" (default: refuse to start, so no run "
                          "is mislabeled)")
+    ap.add_argument("--allow-unfrozen-corpus", action="store_true",
+                    help="run retrieval conditions on a corpus that is not frozen / not "
+                         "ingested from the frozen version (pilots only; recorded in manifests)")
     args = ap.parse_args()
 
     if args.init_spec:
@@ -252,6 +281,27 @@ def main() -> int:
         blocked_ids = {cid for cid, _ in blocked}
         conditions = [c for c in conditions if c["id"] not in blocked_ids]
         print(f"Skipping {len(blocked_ids)} condition(s); running {len(conditions)}.\n")
+
+    bad_models = [m["model"] for m in spec["models"] if placeholder_model(m)]
+    if bad_models:
+        print(f"Model placeholder(s) not filled in: {bad_models}. Set the exact model ID in the spec.")
+        if not args.dry_run:
+            return 2
+
+    corpus_problems = []
+    for c in conditions:
+        st = corpus_check(c, project_root)
+        c["_corpus_status"] = st
+        if st is not None and not st["ok"]:
+            corpus_problems.append((c["id"], st["reason"]))
+    if corpus_problems:
+        print("Retrieval conditions whose corpus is not frozen and ingested:")
+        for cid, why in corpus_problems:
+            print(f"  - {cid}: {why}")
+        if not (args.allow_unfrozen_corpus or args.dry_run):
+            print("Refusing to start: of-record retrieval runs need the frozen corpus. "
+                  "Freeze + ingest, or pass --allow-unfrozen-corpus for a pilot.")
+            return 2
 
     cases = list(spec["cases"])
     pending = [(c["name"], c["pending"]) for c in cases if c.get("pending")]

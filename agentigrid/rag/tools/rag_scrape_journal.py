@@ -10,7 +10,11 @@ validator plus the ExaGO solve. An iteration is kept as an exemplar only if
     written before that field existed are refused unless --allow-legacy);
   * the solve converged, is feasible, has zero violations and an objective value;
   * it is a real single solve (not ANALYSIS/COMPLETE/EXPLORE/SWEEP/CONTINGENCY);
-  * its description is real (not empty / "No description" / "no commands applied").
+  * its description is real (not empty / "No description" / "no commands applied");
+  * it violates none of the run's intent guards (manifest "guards", same checks as
+    the evaluator: load kept, no cost-curve / rating edits, voltage band not
+    widened, outaged branch kept out) -- so the corpus never teaches a shortcut
+    that the experiment forbids.
 
 The exemplar teaches what the model must EMIT: the full `modify` action with its
 nested `commands` — never the ExaGO command line (which carried absolute paths
@@ -120,6 +124,29 @@ def reject_reason(entry: dict, allow_legacy: bool = False) -> str | None:
     return None
 
 
+def _evaluator():
+    import importlib.util
+    path = Path(__file__).resolve().parent / "experiment_eval.py"
+    spec = importlib.util.spec_from_file_location("experiment_eval", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def intent_violations(entries: list, idx: int, manifest: dict | None) -> list[str]:
+    """Intent guards violated by entries[idx] under the run's manifest (evaluator
+    semantics; legacy manifests get the evaluator's defaults)."""
+    ev = _evaluator()
+    goal = {"target_pct": (manifest or {}).get("target_pct"), "success": (manifest or {}).get("success")}
+    if manifest and manifest.get("guards") is not None:
+        goal["guards"] = manifest["guards"]
+    dict_entries = [e for e in entries if isinstance(e, dict)]
+    e = entries[idx]
+    j = next(k for k, x in enumerate(dict_entries) if x is e)
+    return ev.guard_violations(e, ev.effective_commands(dict_entries, j),
+                               ev.base_load(dict_entries), ev.goal_guards(goal))
+
+
 def load_holdout(spec_paths: list[Path]) -> dict:
     goals, networks = set(), set()
     for sp in spec_paths:
@@ -219,8 +246,12 @@ def main(argv: list[str] | None = None) -> int:
 
     seen, exemplars, rejected = set(), [], {}
     for _jf, data, manifest in journals:
-        for entry in data["entries"]:
+        for idx, entry in enumerate(data["entries"]):
             why = reject_reason(entry, args.allow_legacy) or held_out(entry, manifest, holdout)
+            if not why:
+                bad = intent_violations(data["entries"], idx, manifest)
+                if bad:
+                    why = "intent guard: " + ", ".join(sorted(set(bad)))
             if why:
                 key = "held out: " + why if why.startswith("evaluated") else why
                 rejected[key] = rejected.get(key, 0) + 1
