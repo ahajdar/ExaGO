@@ -7,7 +7,8 @@
     "Every goal declares intent guards (same semantics as the evaluator) and states its constraints in its text; rag_scrape_journal.py drops any iteration that violates them, so the corpus never shows a forbidden shortcut.",
     "PFLOW goals on case118 (relieve / voltage) are pending until their stressed variants are pre-checked: voltage -> precheck_cases.py --case ../datafiles/case118.m --apps opflow,pflow --vband 0.95,1.05 --scales 0.8,0.9,1.0; relieve -> precheck_cases.py --case ../datafiles/case118.m --outage-scan 1.0 (then 1.1-1.3 with --agc if needed). Freeze with --write-stressed into rag/tools/specs/cases/, set the paths, add the branch_stays_out guard to the relieve case, remove 'pending'. Until then run with --skip-unimplemented.",
     "Run from the agentigrid project root: python rag/tools/experiment_runner.py --spec rag/tools/specs/corpus_bootstrap_spec.json --skip-unimplemented (set reps to 1 first to measure the per-run cost from the journals' llm_usage).",
-    "Relaxed limits (voltage band, line ratings) are not cost savings; goals and guards follow the evaluation spec. Runs made before this rule: re-scrape with --guards-spec rag/tools/specs/corpus_bootstrap_spec.json so the current guards apply to them too."
+    "Relaxed limits (voltage band, line ratings) are not cost savings; goals and guards follow the evaluation spec. Runs made before this rule: re-scrape with --guards-spec rag/tools/specs/corpus_bootstrap_spec.json so the current guards apply to them too.",
+    "ACTIVSg500-scopflow (secure_dispatch) removed 2026-09-28: its SCOPFLOW baseline was never feasible in the bootstrap runs, so it produced no exemplars."
   ],
   "agentigrid_cmd": "agentigrid",
   "project_root": ".",
@@ -22,7 +23,6 @@
     {"name": "case118-opflow", "network": "case118", "path": "../datafiles/case118.m", "app": "opflow", "goals": ["cost5", "vband97", "gen_out", "load_growth"]},
     {"name": "case118-scopflow", "network": "case118", "path": "../datafiles/case118.m", "app": "scopflow", "extra_args": ["--ctgc", "../datafiles/case118.cont"], "goals": ["secure_dispatch", "secure_band"]},
     {"name": "ACTIVSg500-opflow", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m", "app": "opflow", "goals": ["cost5", "vband97", "load_growth"]},
-    {"name": "ACTIVSg500-scopflow", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m", "app": "scopflow", "extra_args": ["--ctgc", "../datafiles/case_ACTIVSg500.cont"], "goals": ["secure_dispatch"]},
     {"name": "case118-pflow-relieve", "network": "case118", "path": "(pending)", "app": "pflow", "goals": ["relieve118"], "pending": "pre-check a forced-outage variant of case118 (see notes), freeze it, set path and a case-level branch_stays_out guard"},
     {"name": "case118-pflow-voltage", "network": "case118", "path": "(pending)", "app": "pflow", "goals": ["voltage118"], "pending": "pre-check a 0.95-1.05 pu band variant of case118 (see notes), freeze it, set path"}
   ],
