@@ -279,6 +279,9 @@ class TestErrorRecovery:
         disc = session.journal.discarded_actions
         assert [(d["iteration"], d["kind"]) for d in disc] == [(1, "rejected"), (2, "rejected")]
         assert "parse JSON" in disc[0]["feedback"] and "Unknown action" in disc[1]["feedback"]
+        # the rejected proposal itself is kept (raw model output)
+        assert disc[0]["response"] == "This is not JSON" and disc[0]["response_truncated"] is False
+        assert '"dance"' in disc[1]["response"] or "dance" in disc[1]["response"]
 
     def test_api_errors_are_not_counted_as_rejections(self, tmp_path: Path):
         cfg = _make_config(tmp_path, max_iterations=10)
@@ -296,7 +299,27 @@ class TestErrorRecovery:
             mock_executor.run.return_value = sim_result
             mock_exec_cls.return_value = mock_executor
             session = AgentLoopController(cfg).run(BASE_CASE, "Test api error")
-        assert [(d["iteration"], d["kind"]) for d in session.journal.discarded_actions] == [(1, "api_error")]
+        disc = session.journal.discarded_actions
+        assert [(d["iteration"], d["kind"]) for d in disc] == [(1, "api_error")]
+        assert "response" not in disc[0]              # no model response for a failed request
+
+    def test_long_discarded_response_is_capped(self, tmp_path: Path):
+        from agentigrid.engine import agent_loop as al
+        cfg = _make_config(tmp_path, max_iterations=10)
+        long_text = "x" * (al.DISCARDED_RESPONSE_MAX + 50)
+        responses = [_objectives_response(), _make_llm_response(None, raw_text=long_text),
+                     _make_llm_response({"action": "complete", "reasoning": "Done",
+                                         "findings": {"summary": "ok"}})]
+        mock_backend = MockBackend(responses)
+        sim_result = _make_sim_result(stdout=_sample_stdout(), success=True)
+        with patch("agentigrid.engine.agent_loop.create_backend", return_value=mock_backend), \
+             patch("agentigrid.engine.agent_loop.SimulationExecutor") as mock_exec_cls:
+            mock_executor = MagicMock()
+            mock_executor.run.return_value = sim_result
+            mock_exec_cls.return_value = mock_executor
+            session = AgentLoopController(cfg).run(BASE_CASE, "Test cap")
+        d = session.journal.discarded_actions[0]
+        assert len(d["response"]) == al.DISCARDED_RESPONSE_MAX and d["response_truncated"] is True
 
     def test_unknown_action(self, tmp_path: Path):
         """LLM returns unknown action, then completes."""

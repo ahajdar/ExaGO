@@ -67,6 +67,9 @@ from agentigrid.engine.goal_classifier import build_classification_prompts, pars
 
 logger = logging.getLogger("agentigrid.engine.agent_loop")
 
+# Cap on the raw model response kept for a discarded iteration (journal telemetry).
+DISCARDED_RESPONSE_MAX = 4000
+
 _MAX_CONSECUTIVE_PARSE_FAILURES = 3
 
 
@@ -1241,6 +1244,7 @@ class AgentLoopController:
                 self._print("\nSearch stopped by user.")
                 break
             self._iteration_api_error = False
+            self._iteration_response_text = None
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:
@@ -1325,14 +1329,22 @@ class AgentLoopController:
     def _record_discarded(self, iteration: int, internal: bool = False) -> None:
         """Journal telemetry for an iteration whose action produced no entry.
 
-        Only counts are persisted (plus the truncated feedback that was sent back
-        to the model); the entry list and all summary statistics are unaffected."""
+        Persisted: iteration, kind (rejected / internal / api_error), the
+        truncated feedback sent back to the model and, when the model answered,
+        its raw response (the rejected proposal itself, capped at
+        DISCARDED_RESPONSE_MAX characters). The entry list and all summary
+        statistics are unaffected."""
         kind = "internal" if internal else ("api_error" if getattr(self, "_iteration_api_error", False) else "rejected")
-        self._journal.discarded_actions.append({
+        record = {
             "iteration": iteration,
             "kind": kind,
             "feedback": (self._error_feedback or "")[:300],
-        })
+        }
+        text = getattr(self, "_iteration_response_text", None)
+        if text is not None and kind != "api_error":   # an API error has no model response
+            record["response"] = text[:DISCARDED_RESPONSE_MAX]
+            record["response_truncated"] = len(text) > DISCARDED_RESPONSE_MAX
+        self._journal.discarded_actions.append(record)
 
     def _emit_discarded(self, iteration: int) -> None:
         """Emit a UI-only 'discarded' timeline card for an iteration whose action
@@ -1445,6 +1457,9 @@ class AgentLoopController:
 
         response = self._backend.complete(system_prompt, user_prompt)
         logger.debug("LLM raw response: %s", response.raw_text[:500])
+        # Kept for journal telemetry if this iteration's action is discarded:
+        # the exact proposal the parser / validator rejected.
+        self._iteration_response_text = response.raw_text or ""
 
         # Track tokens
         pt = response.prompt_tokens or 0
@@ -5149,6 +5164,7 @@ class AgentLoopController:
                 self._print("\nSearch stopped by user.")
                 break
             self._iteration_api_error = False
+            self._iteration_response_text = None
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:
