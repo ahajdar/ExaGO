@@ -1,5 +1,6 @@
 {
   "notes": [
+    "Relieve task replaced (Amir, 2026-09-28). With the output cap fixed (truncated = 0), the outage variant (branch 87-141 out, 9 overloads) still made almost no progress in 3 runs: the solves after changes had 9, 8, 9 and 9 violations. It is replaced by the shipped ACTIVSg500 case without an outage (PFLOW: 2 overloads, max 101.35%; OPFLOW feasible at 72,578.30), which is closer to the evaluation relieve task (2 overloads, max 111.6%). The goal is now relieve_base with the case-band guard, because the agent had changed bus voltage limits in every run. The retired relieve_ho runs and the frozen outage file are kept only as a record.",
     "Output-token cap (2026-09-28): the first 42 runs used the default max_tokens=4096. In the ACTIVSg500 relieve cell, r1 and r2 aborted after 3 consecutive empty, unparseable responses and r3 had 1; no run applied a modification. This is consistent with generation stopping at the cap, which the new telemetry will confirm or rule out. From here on every run sets AGENTIGRID_MAX_TOKENS=16000 through the spec-level env, and the journal records stop_reason, content block types and llm_usage.max_tokens. Only the re-run relieve cell uses the new cap; runs already marked ok keep 4096. That is acceptable for exemplar generation, and every exemplar is solver-certified either way.",
     "Corpus bootstrap (knowledge distillation): a capable model works HELD-OUT tasks; rag_scrape_journal.py keeps only solver-certified iterations as exemplars.",
     "Held out from the of-record experiment by construction: different networks (case118, case_ACTIVSg500, case9mod) and different goal instances. The scraper additionally drops anything from grader_ablation_spec.json networks/goals.",
@@ -27,7 +28,7 @@
     {"name": "case118-opflow", "network": "case118", "path": "../datafiles/case118.m", "app": "opflow", "goals": ["cost5", "vband97", "gen_out", "load_growth"]},
     {"name": "case118-scopflow", "network": "case118", "path": "../datafiles/case118.m", "app": "scopflow", "extra_args": ["--ctgc", "../datafiles/case118.cont"], "goals": ["secure_dispatch", "secure_band"]},
     {"name": "ACTIVSg500-opflow", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m", "app": "opflow", "goals": ["cost5", "vband97", "load_growth"]},
-    {"name": "ACTIVSg500-pflow-relieve", "network": "case_ACTIVSg500", "path": "./rag/tools/specs/cases/case_ACTIVSg500_load1_out87-141.m", "app": "pflow", "goals": ["relieve_ho"], "guards": [{"branch_stays_out": [87, 141, 0]}]},
+    {"name": "ACTIVSg500-pflow-relieve-base", "network": "case_ACTIVSg500", "path": "../datafiles/case_ACTIVSg500.m", "app": "pflow", "goals": ["relieve_base"]},
     {"name": "case118-pflow-voltage", "network": "case118", "path": "./rag/tools/specs/cases/case118_load1_v0.95-1.05.m", "app": "pflow", "goals": ["voltage118"]}
   ],
   "goals": [
@@ -37,7 +38,7 @@
     {"id": "load_growth", "text": "Determine how much uniform load growth the system tolerates while remaining feasible, testing growth in steps", "guards": []},
     {"id": "secure_dispatch", "text": "Obtain a dispatch that stays feasible for every contingency in the contingency file, without shedding load or relaxing bus voltage limits or line ratings, and report its cost", "guards": ["load_preserved", "no_rating_edits", {"vband_not_widened": "case"}]},
     {"id": "secure_band", "text": "Obtain a contingency-secure dispatch with all bus voltages held between 0.96 and 1.04 pu, without shedding load or raising line ratings", "guards": ["load_preserved", "no_rating_edits", {"vband_not_widened": [0.96, 1.04]}]},
-    {"id": "relieve_ho", "text": "Relieve every overloaded line after the forced branch outage, without shedding load, changing line ratings, or returning the out-of-service branch to service", "success": "no_violations", "guards": ["load_preserved", "no_rating_edits"]},
+    {"id": "relieve_base", "text": "Relieve every overloaded line without shedding load, changing line ratings, or relaxing bus voltage limits", "success": "no_violations", "guards": ["load_preserved", "no_rating_edits", {"vband_not_widened": "case"}]},
     {"id": "voltage118", "text": "Bring every bus voltage within 0.95-1.05 pu without shedding load or changing the voltage limits", "success": "no_violations", "guards": ["load_preserved", {"vband_not_widened": [0.95, 1.05]}]}
   ],
   "conditions": [
