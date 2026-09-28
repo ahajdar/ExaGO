@@ -387,6 +387,90 @@ def write_stressed(case: Path, factor: float, out_dir: Path,
     return out
 
 
+def gen_keys(net) -> list[tuple[int, int]]:
+    """(bus, gen_id) per generator, gen_id = 0-based ordinal among the bus's units
+    (the addressing AgentiGrid's set_gen_status uses)."""
+    seen: dict[int, int] = {}
+    out = []
+    for g in net.generators:
+        k = seen.get(g.bus, 0)
+        seen[g.bus] = k + 1
+        out.append((g.bus, k))
+    return out
+
+
+def greedy_commitment(base_cost: float, singles: dict, combo_cost) -> dict:
+    """Greedy unit commitment over offline units: try units in order of their
+    single-unit saving, keep each one that lowers the cost further.
+    singles: {key: cost with only that unit committed (None = failed/infeasible)};
+    combo_cost(keys) -> cost (None = failed)."""
+    order = sorted((k for k, c in singles.items() if c is not None and c < base_cost),
+                   key=lambda k: singles[k])
+    chosen, best = [], base_cost
+    for k in order:
+        c = combo_cost(chosen + [k])
+        if c is not None and c < best - 1e-6:
+            chosen, best = chosen + [k], c
+    return {"committed": chosen, "cost": best,
+            "improvement_pct": round((base_cost - best) / base_cost * 100.0, 3) if base_cost else None}
+
+
+def cost_headroom(cfg, case: Path, app: str, ctgc: Path, scale: float, agc: bool) -> dict:
+    """How much of a cost goal is reachable with levers ALLOWED under the intent
+    guards? The baseline is already an optimal (SC)OPF, so with load, cost
+    curves, voltage band and ratings fixed, the main remaining lever is unit
+    commitment, which OPF itself does not decide: bringing offline units online,
+    and taking online units offline (saving their fixed cost term, which OPF pays
+    even at Pmin). Solves the baseline, every single commitment change, and a
+    greedy combination. Taps, shunts and phase shifters are not searched, so the
+    result is a lower bound on the achievable saving."""
+    from agentigrid.engine.commands import SetGenStatus
+    from agentigrid.engine.executor import SimulationExecutor
+    from agentigrid.engine.modifier import apply_modifications
+    from agentigrid.parsers import parse_simulation_result_for_app
+    from agentigrid.parsers.matpower_parser import parse_matpower
+
+    base_file = parse_matpower(case)
+    base = base_file if abs(scale - 1.0) < 1e-12 else stressed_network(base_file, scale, agc)
+    executor = SimulationExecutor(cfg.exago, cfg.output)
+    extra = scopflow_args(ctgc, cfg.exago.mpi_np) if app == "scopflow" else None
+
+    def solve(net, it):
+        sim = executor.run(net, application=app, iteration=it, extra_args=extra)
+        res = parse_simulation_result_for_app(sim, app) if sim.success else None
+        rec = summarize_result(res, sim)
+        return rec["objective"] if _feasible(rec) else None
+
+    base_cost = solve(base, 970)
+    if base_cost is None:
+        return {"error": "baseline not feasible", "base_cost": None}
+    keys = gen_keys(base)
+    ref = {b.bus_i for b in base.buses if b.type == 3}
+    actions = []                         # (bus, gen_id, new_status)
+    for i, g in enumerate(base.generators):
+        if g.Pmax <= 0:
+            continue
+        if g.status != 1:
+            actions.append((*keys[i], 1))
+        elif g.bus not in ref:
+            actions.append((*keys[i], 0))
+
+    def with_changes(acts):
+        net, _ = apply_modifications(base, [SetGenStatus(bus=b, status=st, gen_id=k) for b, k, st in acts])
+        return net
+
+    singles = {}
+    for act in actions:
+        singles[act] = c = solve(with_changes([act]), 971)
+        verb = "commit" if act[2] == 1 else "decommit"
+        print(f"  {verb:<8} bus {act[0]} (unit {act[1]}): "
+              + (f"cost {c:,.2f} ({(base_cost - c) / base_cost * 100:+.3f}%)" if c is not None else "not feasible"))
+    greedy = greedy_commitment(base_cost, singles, lambda acts: solve(with_changes(acts), 972))
+    return {"case": str(case), "app": app, "scale": scale, "agc": agc, "base_cost": base_cost,
+            "candidates": len(actions),
+            "singles": {f"{b}-{k}->{st}": c for (b, k, st), c in singles.items()}, "greedy": greedy}
+
+
 def outage_scan(cfg, case: Path, scale: float, agc: bool, vband, top: int = 15) -> list[dict]:
     """Single-branch outages at one load level: PFLOW for every non-islanding
     outage, then OPFLOW for the *top* outages by overload count / max loading.
@@ -458,6 +542,10 @@ def main(argv: list[str] | None = None) -> int:
                     help="scan single-branch outages at load scale F (PFLOW, then OPFLOW for the "
                          "top candidates) and exit")
     ap.add_argument("--top", type=int, default=15, help="outage-scan: candidates to check with OPFLOW")
+    ap.add_argument("--cost-headroom", metavar="APP", choices=("opflow", "scopflow"),
+                    help="estimate the cost saving reachable with allowed levers (unit commitment: "
+                         "committing offline and decommitting online units) for a cost goal solved "
+                         "with APP, at --scales' first value; exit")
     args = ap.parse_args(argv)
 
     case, ctgc = Path(args.case), Path(args.ctgc)
@@ -474,6 +562,19 @@ def main(argv: list[str] | None = None) -> int:
         outage = parse_outage(args.outage) if args.outage else None
         out = write_stressed(case, args.write_stressed, Path(args.stressed_dir), vband, args.agc, outage)
         print(f"Wrote stressed variant: {out}\nPoint the spec's pflow (and/or scopflow) case entry at it.")
+        return 0
+
+    if args.cost_headroom:
+        from agentigrid.config import load_config
+        cfg = load_config(args.config) if args.config else load_config(None)
+        scale = float(args.scales.split(",")[0])
+        rep = cost_headroom(cfg, case, args.cost_headroom, ctgc, scale, args.agc)
+        g = rep.get("greedy") or {}
+        print(f"\nbase cost {rep.get('base_cost')}; {rep.get('candidates')} commitment changes tried; greedy "
+              f"combination of {len(g.get('committed', []))} change(s) -> cost {g.get('cost')} "
+              f"({g.get('improvement_pct')}% saving)")
+        if args.json:
+            Path(args.json).write_text(json.dumps(rep, indent=2, default=str))
         return 0
 
     if args.outage_scan is not None:

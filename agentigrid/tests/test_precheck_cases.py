@@ -180,3 +180,24 @@ def test_branch_keys_islanding_and_outage_variant(tmp_path):
     assert net.branches[i].status == 0
     assert sum(br.status == 0 for br in net.branches) == sum(br.status == 0 for br in base.branches) + 1
     assert out.name == f"case_ACTIVSg200_load1_out{keys[i][0]}-{keys[i][1]}" + (f"-{keys[i][2]}" if keys[i][2] else "") + ".m"
+
+
+# --- cost headroom (allowed levers for cost goals) ----------------------------
+
+def test_greedy_commitment_keeps_only_improving_units():
+    singles = {("a", 0): 95.0, ("b", 0): 97.0, ("c", 0): 101.0, ("d", 0): None}
+    combos = {(("a", 0),): 95.0, (("a", 0), ("b", 0)): 96.0}
+
+    def combo(ks):
+        return combos.get(tuple(ks))
+    g = pc.greedy_commitment(100.0, singles, combo)
+    assert g["committed"] == [("a", 0)] and g["cost"] == 95.0 and g["improvement_pct"] == 5.0
+
+
+@needs_200
+def test_gen_keys_address_units_like_set_gen_status():
+    from agentigrid.parsers.matpower_parser import parse_matpower
+    net = parse_matpower(G200)
+    keys = pc.gen_keys(net)
+    assert len(keys) == len(net.generators) and len(set(keys)) == len(keys)
+    assert all(k >= 0 for _b, k in keys)
