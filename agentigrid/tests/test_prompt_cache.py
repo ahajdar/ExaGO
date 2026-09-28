@@ -147,7 +147,7 @@ def test_usage_meter_counts_all_calls_and_is_transparent():
     assert meter.totals() == {
         "calls": 3, "prompt_tokens": 8110, "completion_tokens": 22,
         "cache_creation_tokens": 4000, "cache_read_tokens": 4000,
-        "api_errors": 0, "temperature_sent": None,
+        "api_errors": 0, "truncated": 0, "temperature_sent": None,
     }
     assert meter.name() == "stub"
     assert meter.custom() == "delegated"                 # backend-specific attrs delegate
@@ -221,3 +221,32 @@ def test_other_api_errors_are_flagged_and_counted():
     with patch.object(backend._client.messages, "create", return_value=_fake_message(5, 0, 0)):
         meter.complete("sys", "u")
     assert meter.totals()["temperature_sent"] is True
+
+
+# ---------------------------------------------------------------------------
+# Output-token cap: stop_reason telemetry and AGENTIGRID_MAX_TOKENS
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not _has_anthropic, reason="anthropic not installed")
+@patch.dict(os.environ, {"TEST_API_KEY": "sk-test"})
+def test_max_tokens_stop_is_reported_and_counted():
+    from agentigrid.backends.anthropic_backend import AnthropicBackend
+    backend = AnthropicBackend(_cfg())
+    meter = UsageMeter(backend)
+    msg = _fake_message(10, 0, 0, output_tokens=256, text="")
+    msg.content = [SimpleNamespace(type="thinking", thinking="...")]
+    msg.stop_reason = "max_tokens"
+    with patch.object(backend._client.messages, "create", return_value=msg):
+        r = meter.complete("sys", "u")
+    assert r.stop_reason == "max_tokens" and r.content_types == ["thinking"]
+    assert r.raw_text == "" and r.json_data is None and not r.api_error
+    assert meter.totals()["truncated"] == 1
+
+
+def test_max_tokens_env_override(monkeypatch):
+    monkeypatch.setenv("AGENTIGRID_MAX_TOKENS", "16000")
+    assert load_config(None).llm.max_tokens == 16000
+    monkeypatch.setenv("AGENTIGRID_MAX_TOKENS", "lots")
+    assert load_config(None).llm.max_tokens == 4096     # ignored, default kept
+    monkeypatch.delenv("AGENTIGRID_MAX_TOKENS")
+    assert load_config(None).llm.max_tokens == 4096

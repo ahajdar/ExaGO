@@ -224,7 +224,9 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
 
     cmd = build_cmd(spec, case, goal, model)
     env = dict(os.environ)
-    for k, v in cond.get("env", {}).items():
+    # Spec-level env (e.g. AGENTIGRID_MAX_TOKENS) applies to every condition;
+    # a condition's own env wins on a clash.
+    for k, v in {**spec.get("env", {}), **cond.get("env", {})}.items():
         env[k] = str(v)
 
     manifest = {
@@ -241,6 +243,7 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
             (None if goal.get("guards") is None and case.get("guards") is None
              else list(goal.get("guards") or []) + list(case.get("guards") or [])),
         "condition": cond["id"], "condition_env": cond.get("env", {}),
+        "spec_env": spec.get("env", {}),
         "corpus": cond.get("_corpus_status"),
         "backend": model["backend"], "model": model["model"],
         "max_iter": spec.get("max_iter", 4), "rep": rep,

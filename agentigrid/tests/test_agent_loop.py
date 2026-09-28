@@ -303,6 +303,27 @@ class TestErrorRecovery:
         assert [(d["iteration"], d["kind"]) for d in disc] == [(1, "api_error")]
         assert "response" not in disc[0]              # no model response for a failed request
 
+    def test_truncated_output_is_journaled_as_truncated(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, max_iterations=10)
+        cut = LLMResponse(raw_text="", json_data=None, json_error="no JSON", model="m",
+                          backend="test", prompt_tokens=10, completion_tokens=4096,
+                          stop_reason="max_tokens", content_types=["thinking"])
+        responses = [_objectives_response(), cut,
+                     _make_llm_response({"action": "complete", "reasoning": "Done",
+                                         "findings": {"summary": "ok"}})]
+        mock_backend = MockBackend(responses)
+        sim_result = _make_sim_result(stdout=_sample_stdout(), success=True)
+        with patch("agentigrid.engine.agent_loop.create_backend", return_value=mock_backend), \
+             patch("agentigrid.engine.agent_loop.SimulationExecutor") as mock_exec_cls:
+            mock_executor = MagicMock()
+            mock_executor.run.return_value = sim_result
+            mock_exec_cls.return_value = mock_executor
+            session = AgentLoopController(cfg).run(BASE_CASE, "Test truncation")
+        d = session.journal.discarded_actions[0]
+        assert (d["iteration"], d["kind"], d["stop_reason"]) == (1, "truncated", "max_tokens")
+        assert d["content_types"] == ["thinking"] and d["response"] == ""
+        assert "output-token limit" in d["feedback"]
+
     def test_long_discarded_response_is_capped(self, tmp_path: Path):
         from agentigrid.engine import agent_loop as al
         cfg = _make_config(tmp_path, max_iterations=10)

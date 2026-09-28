@@ -103,9 +103,15 @@ class AnthropicBackend(LLMBackend):
                     raise
 
             raw_text = ""
+            content_types = []
             for block in response.content:
+                content_types.append(getattr(block, "type", None))
                 if block.type == "text":
                     raw_text += block.text
+            stop_reason = getattr(response, "stop_reason", None)
+            if stop_reason == "max_tokens":
+                logger.warning("Response stopped at max_tokens=%s (blocks: %s, %d text chars)",
+                               self._config.max_tokens, content_types, len(raw_text))
 
             prompt_tokens, cache_creation, cache_read = _input_token_breakdown(
                 response.usage
@@ -124,6 +130,8 @@ class AnthropicBackend(LLMBackend):
                 completion_tokens=completion_tokens,
                 cache_creation_tokens=cache_creation,
                 cache_read_tokens=cache_read,
+                stop_reason=stop_reason,
+                content_types=content_types,
             )
 
         except Exception as exc:

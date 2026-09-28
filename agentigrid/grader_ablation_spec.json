@@ -1,5 +1,6 @@
 {
   "notes": [
+    "Output-token cap: every condition runs with AGENTIGRID_MAX_TOKENS=16000 (spec-level env), which the manifest records as spec_env. An output cut off at the cap is journaled as kind 'truncated' and reported as discarded_truncated. It is not counted as a validator rejection (H3), because no proposal reached the validator.",
     "Of-record matrix for the RAG paper (plan of 2026-09-26). Condition ids match the paper: C0, C1, C2a/b (C2c is offline-only). Graph RAG (formerly C3) is out of scope for this paper (planned follow-up).",
     "C2b (reranker) is implemented (needs sentence-transformers; model BAAI/bge-reranker-base or AGENTIGRID_RERANKER_MODEL). Its thresholds must be fixed from labeled pairs (rag/tools/relevance_labels.py fit) and added to the C2b env as AGENTIGRID_CRAG_TAU_LOWER / _UPPER before the of-record run; until then C2b uses the cosine defaults 0.30/0.50 on reranker scores (pilot only).",
     "C2c (Platt-calibrated reranker) is evaluated OFFLINE only (Amir, 2026-09-28): AUC and ECE of calibrated probabilities on held-out labels (rag/tools/relevance_labels.py fit). No C2c agent runs: calibration is monotone, so with thresholds fitted by the same rule C2c would make exactly C2b's grading decisions and its runs would duplicate C2b's.",
@@ -24,6 +25,7 @@
   "max_iter": 4,
   "timeout_s": 1800,
   "skip_existing": true,
+  "env": {"AGENTIGRID_MAX_TOKENS": "16000"},
   "cases": [
     {"name": "case39-opflow", "network": "case39", "path": "./data/case39.m", "app": "opflow", "goals": ["loadmax"]},
     {"name": "ACTIVSg200-opflow", "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m", "app": "opflow", "goals": ["cost10", "loadmax"]},

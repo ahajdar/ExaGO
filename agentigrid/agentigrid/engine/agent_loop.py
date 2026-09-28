@@ -1245,6 +1245,8 @@ class AgentLoopController:
                 break
             self._iteration_api_error = False
             self._iteration_response_text = None
+            self._iteration_stop_reason = None
+            self._iteration_content_types = None
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:
@@ -1329,17 +1331,31 @@ class AgentLoopController:
     def _record_discarded(self, iteration: int, internal: bool = False) -> None:
         """Journal telemetry for an iteration whose action produced no entry.
 
-        Persisted: iteration, kind (rejected / internal / api_error), the
+        Persisted: iteration, kind (rejected / internal / api_error /
+        truncated), stop_reason and content block types when known, the
         truncated feedback sent back to the model and, when the model answered,
         its raw response (the rejected proposal itself, capped at
         DISCARDED_RESPONSE_MAX characters). The entry list and all summary
         statistics are unaffected."""
-        kind = "internal" if internal else ("api_error" if getattr(self, "_iteration_api_error", False) else "rejected")
+        stop = getattr(self, "_iteration_stop_reason", None)
+        if internal:
+            kind = "internal"
+        elif getattr(self, "_iteration_api_error", False):
+            kind = "api_error"
+        elif stop == "max_tokens":
+            kind = "truncated"      # output cap hit: a harness limit, not a rejected proposal
+        else:
+            kind = "rejected"
         record = {
             "iteration": iteration,
             "kind": kind,
             "feedback": (self._error_feedback or "")[:300],
         }
+        if stop is not None:
+            record["stop_reason"] = stop
+        ctypes = getattr(self, "_iteration_content_types", None)
+        if ctypes is not None:
+            record["content_types"] = list(ctypes)
         text = getattr(self, "_iteration_response_text", None)
         if text is not None and kind != "api_error":   # an API error has no model response
             record["response"] = text[:DISCARDED_RESPONSE_MAX]
@@ -1460,6 +1476,8 @@ class AgentLoopController:
         # Kept for journal telemetry if this iteration's action is discarded:
         # the exact proposal the parser / validator rejected.
         self._iteration_response_text = response.raw_text or ""
+        self._iteration_stop_reason = getattr(response, "stop_reason", None)
+        self._iteration_content_types = getattr(response, "content_types", None)
 
         # Track tokens
         pt = response.prompt_tokens or 0
@@ -1486,14 +1504,23 @@ class AgentLoopController:
                 _MAX_CONSECUTIVE_PARSE_FAILURES,
                 response.json_error,
             )
-            self._print(f"[Iter {iteration}] Failed to parse LLM response as JSON")
+            truncated = getattr(response, "stop_reason", None) == "max_tokens"
+            self._print(f"[Iter {iteration}] Failed to parse LLM response as JSON"
+                        + (f" (output hit max_tokens={self._config.llm.max_tokens})" if truncated else ""))
             if self._consecutive_parse_failures >= _MAX_CONSECUTIVE_PARSE_FAILURES:
                 self._print(f"[Iter {iteration}] Too many consecutive parse failures — aborting")
                 return "error", False
-            self._error_feedback = (
-                "Failed to parse JSON from your response. "
-                "Please respond with a valid JSON object."
-            )
+            if truncated:
+                self._error_feedback = (
+                    "Your previous response was cut off at the output-token limit before "
+                    "a complete JSON object was produced. Respond with the JSON action "
+                    "only, keeping the reasoning brief."
+                )
+            else:
+                self._error_feedback = (
+                    "Failed to parse JSON from your response. "
+                    "Please respond with a valid JSON object."
+                )
             return "error", True
 
         self._consecutive_parse_failures = 0
@@ -4823,6 +4850,7 @@ class AgentLoopController:
                 **_totals(),
                 "backend": self._backend.name(),
                 "model": self._config.llm.model,
+                "max_tokens": self._config.llm.max_tokens,
                 "prompt_cache": bool(getattr(self._config.llm, "prompt_cache", False)),
             }
         
@@ -5165,6 +5193,8 @@ class AgentLoopController:
                 break
             self._iteration_api_error = False
             self._iteration_response_text = None
+            self._iteration_stop_reason = None
+            self._iteration_content_types = None
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:

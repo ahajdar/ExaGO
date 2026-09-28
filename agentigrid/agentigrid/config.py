@@ -315,6 +315,15 @@ def load_config(
             target[parts[-1]] = value
         logger.debug("Applied CLI overrides: %s", cli_overrides)
 
+    # AGENTIGRID_MAX_TOKENS overrides the output-token cap (experiment specs set
+    # it for every condition so the cap is fixed and recorded per run).
+    _mt = os.environ.get("AGENTIGRID_MAX_TOKENS", "").strip()
+    if _mt:
+        try:
+            merged["llm"] = {**merged["llm"], "max_tokens": int(_mt)}
+        except ValueError:
+            logger.warning("Ignoring non-integer AGENTIGRID_MAX_TOKENS=%r", _mt)
+
     # Build frozen dataclass sections
     exago_path_fields = {
         "binary_dir", "opflow_binary", "scopflow_binary", "tcopflow_binary",
