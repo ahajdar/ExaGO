@@ -60,6 +60,12 @@ class VectorStore:
     def count(self) -> int:
         return self._col.count()
 
+    def all_documents(self) -> list[tuple[str, str, dict]]:
+        """Every stored chunk as (id, document, metadata) -- for offline tools
+        such as relevance labelling; not used on the retrieval path."""
+        res = self._col.get(include=["documents", "metadatas"])
+        return list(zip(res.get("ids", []), res.get("documents", []), res.get("metadatas", [])))
+
     def reset(self) -> None:
         """Drop and recreate the collection (a fresh index, no stale chunks)."""
         name = self._col.name
