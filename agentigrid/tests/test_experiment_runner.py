@@ -194,3 +194,14 @@ def test_store_env_selects_corpus_store(monkeypatch):
     r = rag.build_retriever(host="http://localhost:1")
     d = r.describe()
     assert d["store_path"] == "rag/store_docs" and d["collection"] == "docs_kb"
+
+
+def test_llm_failure_detects_runs_with_no_successful_llm_call(tmp_path):
+    j = tmp_path / "journal.json"
+    j.write_text(json.dumps({"entries": [{"iteration": 0}], "llm_usage": {"calls": 4, "prompt_tokens": 0,
+                             "completion_tokens": 0}, "discarded_actions": [{"iteration": 1, "kind": "rejected"}]}))
+    assert "failed" in runner.llm_failure(j)
+    j.write_text(json.dumps({"entries": [{"iteration": 0}, {"iteration": 1}],
+                             "llm_usage": {"calls": 3, "prompt_tokens": 900, "completion_tokens": 50}}))
+    assert runner.llm_failure(j) is None
+    assert runner.llm_failure(None) is None

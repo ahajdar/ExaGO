@@ -23,6 +23,10 @@ class LLMResponse:
     # is the same with or without caching; these break that total down.
     cache_creation_tokens: Optional[int] = None
     cache_read_tokens: Optional[int] = None
+    # True when the request itself failed (network, auth, invalid request...),
+    # as opposed to the model answering with unparseable text. Lets the agent
+    # loop and the evaluator keep API failures out of validator statistics.
+    api_error: bool = False
 
 
 class LLMBackend(ABC):
@@ -75,10 +79,13 @@ class UsageMeter(LLMBackend):
         self.completion_tokens = 0
         self.cache_creation_tokens = 0
         self.cache_read_tokens = 0
+        self.api_errors = 0
 
     def complete(self, system_prompt, user_prompt, temperature=None):
         resp = self._inner.complete(system_prompt, user_prompt, temperature)
         self.calls += 1
+        if getattr(resp, "api_error", False):
+            self.api_errors += 1
         self.prompt_tokens += resp.prompt_tokens or 0
         self.completion_tokens += resp.completion_tokens or 0
         self.cache_creation_tokens += resp.cache_creation_tokens or 0
@@ -104,4 +111,6 @@ class UsageMeter(LLMBackend):
             "completion_tokens": self.completion_tokens,
             "cache_creation_tokens": self.cache_creation_tokens,
             "cache_read_tokens": self.cache_read_tokens,
+            "api_errors": self.api_errors,
+            "temperature_sent": getattr(self._inner, "temperature_sent", None),
         }

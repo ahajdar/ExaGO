@@ -358,12 +358,14 @@ def intent_metrics(entries, goal: dict) -> dict:
 def validator_metrics(journal: dict, entries) -> dict:
     """H3 metrics. An LLM iteration is REJECTED by the deterministic validator /
     parser when it recorded no entry (journal discarded_actions, kind 'rejected')
-    or recorded an entry with >= 1 skipped command. Internal errors are excluded
-    from both numerator and denominator."""
+    or recorded an entry with >= 1 skipped command. Internal errors and failed
+    API requests (kind 'internal' / 'api_error') are excluded from both
+    numerator and denominator."""
     disc = journal.get("discarded_actions") if isinstance(journal, dict) else None
     disc = [d for d in (disc or []) if isinstance(d, dict)]
     rejected_it = {d.get("iteration") for d in disc if d.get("kind", "rejected") == "rejected"}
-    internal_it = {d.get("iteration") for d in disc if d.get("kind") == "internal"}
+    internal_it = {d.get("iteration") for d in disc if d.get("kind") in ("internal", "api_error")}
+    api_err_it = {d.get("iteration") for d in disc if d.get("kind") == "api_error"}
     recorded_it = {e.get("iteration") for e in entries if isinstance(e, dict) and e.get("iteration", 0) != 0}
     partial_it = {e.get("iteration") for e in entries
                   if isinstance(e, dict) and e.get("iteration", 0) != 0 and e.get("skipped_commands")}
@@ -372,7 +374,8 @@ def validator_metrics(journal: dict, entries) -> dict:
     return {"llm_iterations": len(llm_it),
             "validator_rejections": len(rej),
             "validator_rejection_rate": round(len(rej) / len(llm_it), 3) if llm_it else None,
-            "discarded_internal": len(internal_it),
+            "discarded_internal": len(internal_it - api_err_it),
+            "discarded_api_error": len(api_err_it),
             "has_discard_telemetry": int(isinstance(journal, dict) and "discarded_actions" in journal)}
 
 

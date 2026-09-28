@@ -295,3 +295,12 @@ def test_metrics_for_uses_manifest_guards():
     assert m["goal_attained"] == 0 and m["guard_rejections"] == 1 and m["intent_violations"] == 1
     m = ev.metrics_for(journal, {"success": "no_violations", "max_iter": 4})   # legacy: no guards
     assert m["goal_attained"] == 1
+
+
+def test_api_errors_excluded_from_validator_rate():
+    entries = [_pf(0), _pf(1)]
+    journal = {"entries": entries, "discarded_actions": [{"iteration": 2, "kind": "api_error"},
+                                                         {"iteration": 3, "kind": "rejected"}]}
+    m = ev.validator_metrics(journal, entries)
+    assert m["llm_iterations"] == 2 and m["validator_rejections"] == 1
+    assert m["discarded_api_error"] == 1 and m["discarded_internal"] == 0

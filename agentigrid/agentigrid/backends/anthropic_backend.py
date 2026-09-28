@@ -27,6 +27,9 @@ class AnthropicBackend(LLMBackend):
             raise ImportError("anthropic package is required for the Anthropic backend")
 
         self._config = config
+        # None = not yet known; True/False once a call has succeeded / the
+        # model has rejected the parameter (see complete()).
+        self.temperature_sent: Optional[bool] = None
         api_key = os.environ.get(config.api_key_env)
         if not api_key:
             logger.warning(
@@ -74,13 +77,30 @@ class AnthropicBackend(LLMBackend):
         temp = temperature if temperature is not None else self._config.temperature
 
         try:
-            response = self._client.messages.create(
+            kwargs = dict(
                 model=self._config.model,
                 max_tokens=self._config.max_tokens,
-                temperature=temp,
                 system=self._system_param(system_prompt),
                 messages=[{"role": "user", "content": user_prompt}],
             )
+            if self.temperature_sent is not False:
+                kwargs["temperature"] = temp
+            try:
+                response = self._client.messages.create(**kwargs)
+                if "temperature" in kwargs:
+                    self.temperature_sent = True
+            except Exception as exc:
+                # Newer models reject the sampling-temperature parameter
+                # ("`temperature` is deprecated for this model"). Retry once
+                # without it and stop sending it for the rest of the session;
+                # the journal records temperature_sent=False.
+                if "temperature" in kwargs and "temperature" in str(exc).lower():
+                    logger.warning("Model %s rejects `temperature`; retrying without it.", self._config.model)
+                    kwargs.pop("temperature")
+                    self.temperature_sent = False
+                    response = self._client.messages.create(**kwargs)
+                else:
+                    raise
 
             raw_text = ""
             for block in response.content:
@@ -117,6 +137,7 @@ class AnthropicBackend(LLMBackend):
                 backend=self.name(),
                 prompt_tokens=None,
                 completion_tokens=None,
+                api_error=True,
             )
 
 

@@ -147,6 +147,7 @@ def test_usage_meter_counts_all_calls_and_is_transparent():
     assert meter.totals() == {
         "calls": 3, "prompt_tokens": 8110, "completion_tokens": 22,
         "cache_creation_tokens": 4000, "cache_read_tokens": 4000,
+        "api_errors": 0, "temperature_sent": None,
     }
     assert meter.name() == "stub"
     assert meter.custom() == "delegated"                 # backend-specific attrs delegate
@@ -179,3 +180,44 @@ def test_evaluator_reads_usage_and_tolerates_old_journals():
                                         "cache_read_tokens": 8000}})
     assert m["llm_prompt_tokens"] == 12000 and m["llm_cache_read_tokens"] == 8000
     assert all(v is None for v in ev.usage_metrics({"entries": []}).values())
+
+
+# ---------------------------------------------------------------------------
+# Models that reject `temperature`, and API-error accounting
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(not _has_anthropic, reason="anthropic not installed")
+@patch.dict(os.environ, {"TEST_API_KEY": "sk-test"})
+def test_temperature_rejected_retries_without_it_and_remembers():
+    from agentigrid.backends.anthropic_backend import AnthropicBackend
+    backend = AnthropicBackend(_cfg(model="claude-sonnet-5"))
+    calls = []
+
+    def create(**kw):
+        calls.append(kw)
+        if "temperature" in kw:
+            raise RuntimeError("Error code: 400 - `temperature` is deprecated for this model.")
+        return _fake_message(10, 0, 0)
+
+    with patch.object(backend._client.messages, "create", side_effect=create):
+        r1 = backend.complete("sys", "u1")
+        r2 = backend.complete("sys", "u2")
+    assert not r1.api_error and r1.json_data == {"action": "complete"}
+    assert ["temperature" in c for c in calls] == [True, False, False]   # retried once, then omitted
+    assert backend.temperature_sent is False and r2.prompt_tokens == 10
+
+
+@pytest.mark.skipif(not _has_anthropic, reason="anthropic not installed")
+@patch.dict(os.environ, {"TEST_API_KEY": "sk-test"})
+def test_other_api_errors_are_flagged_and_counted():
+    from agentigrid.backends.anthropic_backend import AnthropicBackend
+    backend = AnthropicBackend(_cfg())
+    meter = UsageMeter(backend)
+    with patch.object(backend._client.messages, "create", side_effect=RuntimeError("401 invalid x-api-key")):
+        r = meter.complete("sys", "u")
+    assert r.api_error and r.json_data is None
+    t = meter.totals()
+    assert t["calls"] == 1 and t["api_errors"] == 1 and t["prompt_tokens"] == 0
+    with patch.object(backend._client.messages, "create", return_value=_fake_message(5, 0, 0)):
+        meter.complete("sys", "u")
+    assert meter.totals()["temperature_sent"] is True

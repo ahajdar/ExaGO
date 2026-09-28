@@ -166,6 +166,27 @@ def placeholder_model(model) -> bool:
     return "<" in m or ">" in m or not m.strip()
 
 
+def llm_failure(journal_path) -> str | None:
+    """Why a finished run is not a usable LLM run (None = fine). A run whose LLM
+    calls all failed (e.g. the API rejected the request) still exits 0 and writes
+    a journal, so exit code alone would mark it ok and skip_existing would never
+    retry it."""
+    if journal_path is None:
+        return None
+    try:
+        j = json.loads(Path(journal_path).read_text())
+    except Exception:
+        return None
+    u = j.get("llm_usage")
+    disc = [d for d in (j.get("discarded_actions") or []) if isinstance(d, dict)]
+    n_api = sum(1 for d in disc if d.get("kind") == "api_error")
+    if isinstance(u, dict) and u.get("calls") and not (u.get("prompt_tokens") or u.get("completion_tokens")):
+        return f"all {u.get('calls')} LLM call(s) failed (no tokens used); see run.log for the API error"
+    if n_api and n_api == len(disc) and len(j.get("entries", [])) <= 1:
+        return f"{n_api} iteration(s) lost to API errors and no iteration recorded"
+    return None
+
+
 def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, dry):
     run_id = "__".join([
         sanitize(case["name"]), sanitize(goal["id"]), sanitize(cond["id"]),
@@ -231,16 +252,21 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
         journal_dst = run_dir / "journal.json"
         shutil.copy2(journal_src, journal_dst)
 
+    llm_problem = llm_failure(journal_dst)
     manifest.update({
+        "llm_problem": llm_problem,
         "start_ts": datetime.fromtimestamp(start).isoformat(),
         "wall_s": wall, "exit_code": exit_code, "timed_out": timed_out,
         "journal_src": str(journal_src) if journal_src else None,
         "journal_file": str(journal_dst) if journal_dst else None,
         "log_file": str(log_path),
-        "status": "ok" if (exit_code == 0 and journal_dst) else "failed",
+        "status": ("ok" if (exit_code == 0 and journal_dst and not llm_problem)
+                   else "llm_error" if llm_problem else "failed"),
     })
     manifest_path.write_text(json.dumps(manifest, indent=2))
     flag = "ok " if manifest["status"] == "ok" else "FAIL"
+    if llm_problem:
+        print(f"  [LLM] {run_id}: {llm_problem}")
     print(f"  [{flag}] {run_id}  ({wall}s, exit={exit_code}, journal={'yes' if journal_dst else 'NONE'})")
     return manifest
 

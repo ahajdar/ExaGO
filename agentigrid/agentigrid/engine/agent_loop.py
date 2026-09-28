@@ -1240,6 +1240,7 @@ class AgentLoopController:
                 session.termination_reason = "user_stopped"
                 self._print("\nSearch stopped by user.")
                 break
+            self._iteration_api_error = False
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:
@@ -1326,9 +1327,10 @@ class AgentLoopController:
 
         Only counts are persisted (plus the truncated feedback that was sent back
         to the model); the entry list and all summary statistics are unaffected."""
+        kind = "internal" if internal else ("api_error" if getattr(self, "_iteration_api_error", False) else "rejected")
         self._journal.discarded_actions.append({
             "iteration": iteration,
-            "kind": "internal" if internal else "rejected",
+            "kind": kind,
             "feedback": (self._error_feedback or "")[:300],
         })
 
@@ -1454,6 +1456,11 @@ class AgentLoopController:
                 f"[Iter {iteration}] Tokens: {pt} prompt + {ct} completion "
                 f"(cumulative: ~{self._total_prompt_tokens + self._total_completion_tokens:,})"
             )
+
+        # A failed request (auth, invalid request, network) is not a model
+        # answer: journal it as an API error, not as a rejected action.
+        if getattr(response, "api_error", False):
+            self._iteration_api_error = True
 
         # Parse JSON from response
         if response.json_data is None:
@@ -5141,6 +5148,7 @@ class AgentLoopController:
                 session.termination_reason = "user_stopped"
                 self._print("\nSearch stopped by user.")
                 break
+            self._iteration_api_error = False
             try:
                 action_type, should_continue = self._iteration(iteration, goal)
             except Exception as e:

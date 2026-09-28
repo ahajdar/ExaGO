@@ -280,6 +280,24 @@ class TestErrorRecovery:
         assert [(d["iteration"], d["kind"]) for d in disc] == [(1, "rejected"), (2, "rejected")]
         assert "parse JSON" in disc[0]["feedback"] and "Unknown action" in disc[1]["feedback"]
 
+    def test_api_errors_are_not_counted_as_rejections(self, tmp_path: Path):
+        cfg = _make_config(tmp_path, max_iterations=10)
+        api_err = LLMResponse(raw_text="Anthropic API error: 400", json_data=None, json_error="x",
+                              model="m", backend="test", prompt_tokens=None, completion_tokens=None,
+                              api_error=True)
+        responses = [_objectives_response(), api_err,
+                     _make_llm_response({"action": "complete", "reasoning": "Done",
+                                         "findings": {"summary": "ok"}})]
+        mock_backend = MockBackend(responses)
+        sim_result = _make_sim_result(stdout=_sample_stdout(), success=True)
+        with patch("agentigrid.engine.agent_loop.create_backend", return_value=mock_backend), \
+             patch("agentigrid.engine.agent_loop.SimulationExecutor") as mock_exec_cls:
+            mock_executor = MagicMock()
+            mock_executor.run.return_value = sim_result
+            mock_exec_cls.return_value = mock_executor
+            session = AgentLoopController(cfg).run(BASE_CASE, "Test api error")
+        assert [(d["iteration"], d["kind"]) for d in session.journal.discarded_actions] == [(1, "api_error")]
+
     def test_unknown_action(self, tmp_path: Path):
         """LLM returns unknown action, then completes."""
         cfg = _make_config(tmp_path, max_iterations=10)
