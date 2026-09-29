@@ -12,9 +12,8 @@ Conditions (identical in the paper and the spec):
 | C0-norag | off | — |
 | C1-basic | basic top-k | — |
 | C2a-crag-cosine | corrective | cosine similarity |
-| C2b-crag-reranker | corrective | local cross-encoder (`BAAI/bge-reranker-base`) |
 
-C2c (the Platt-calibrated reranker) is offline only; see section 7.
+C2b (corrective with the local cross-encoder `BAAI/bge-reranker-base`) is implemented but not in the of-record spec. On corpus v1 the retrieval preview (section 3) showed it would inject the same text as C2a on 4 of 5 goals and add only a hedge sentence on the fifth. Grader comparison, human relevance labels and calibration (C2c) are deferred to the next paper; the tools in section 7 stay for that.
 
 ---
 
@@ -187,7 +186,9 @@ columns. `guard_rejections`, `intent_<guard>` and `discarded_*` are in
 
 ---
 
-## 7. Relevance labels (C2b thresholds and C2c offline metrics)
+## 7. Relevance labels (deferred; for a future grader study)
+
+Not part of the current of-record protocol. Use these tools when a grader comparison is planned, for example on a noisier corpus.
 
 ```bash
 python rag/tools/relevance_labels.py sample --out labels/pairs.csv
