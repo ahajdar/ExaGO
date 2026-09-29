@@ -175,6 +175,16 @@ columns. `guard_rejections`, `intent_<guard>` and `discarded_*` are in
 
 ---
 
+Pre-registered hypothesis tests (paper Section IV-G, Table VI):
+
+```bash
+python rag/tools/experiment_stats.py --per-run experiments/ofrecord_v2/analysis/per_run.csv
+```
+
+It writes `stats.json` and `stats.csv` next to `per_run.csv`. The script pairs runs by case, goal, model and repetition. The primary family is pooled over models and Holm-corrected: C1 vs C0 on validity, attainment and cost Δ% (cost goals), and C2a vs C1 on validity. The same contrasts per model form a second Holm family. The script also runs a Kruskal–Wallis test for H2 and the H3 relative-reduction rule with bootstrap confidence intervals. It needs the standard library only and uses a fixed seed.
+
+---
+
 ## 6. Gotchas
 
 | # | Symptom | Cause / fix |
