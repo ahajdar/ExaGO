@@ -85,6 +85,21 @@ print(r.retrieve('Relieve all overloaded transmission lines without shedding loa
 
 ## 3. Dry run, then pilot
 
+Retrieval uses the goal text as its query, and every mode is deterministic for
+a fixed store, so each (goal, condition) injects the same reference block in
+every iteration and repetition. Preview those blocks first; it needs no LLM and
+no solver:
+
+```bash
+python rag/tools/retrieval_preview.py --spec grader_ablation_spec.json
+```
+
+It prints each corrective condition's verdict per goal and which conditions
+inject byte-identical context. The full blocks go to `experiments/retrieval_preview.json`.
+Where two conditions inject identical context for a goal, their runs on that goal
+differ only by sampling noise.
+
+
 ```bash
 python rag/tools/experiment_runner.py --spec grader_ablation_spec.json --dry-run | tail -5
 ```
