@@ -187,6 +187,25 @@ held-out goals it reports AUC (cosine, reranker, calibrated) and ECE (reranker,
 calibrated). Those held-out numbers are the C2c result; there are no C2c agent
 runs.
 
+To have someone else (for example a domain expert) label the pairs, export a
+spreadsheet. It carries the labelling instructions, a goals sheet and one row
+per unique (goal, chunk), shuffled and without cosine scores or ranks, so the
+labeller is blind to the retriever:
+
+```bash
+python rag/tools/relevance_labels.py export-xlsx --pairs labels/pairs.csv --out labels/labeling_sheet.xlsx
+# the labeller fills the yellow Label (1/0/empty) and Comment cells and returns the file
+python rag/tools/relevance_labels.py import-xlsx --xlsx labels/labeling_sheet_filled.xlsx \
+    --pairs labels/pairs.csv --out labels/pairs_labeled.csv
+python rag/tools/relevance_labels.py fit --labels labels/pairs_labeled.csv --heldout-goals relieve,n1cost10
+```
+
+`import-xlsx` copies each label to every sampled pair with that goal and chunk,
+refuses a sheet made from a different `pairs.csv`, and writes the labeller's
+details and per-goal counts to `labels/pairs_labeled.labeller.json`. Keep
+`pairs.csv`, the sent sheet and the returned sheet: together they are the
+provenance of the labels.
+
 ---
 
 ## 8. Changing the corpus (a new version, not an edit)

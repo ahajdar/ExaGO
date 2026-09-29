@@ -89,3 +89,72 @@ def test_fit_report_end_to_end_with_fake_reranker():
     assert rep["heldout"]["ece_calibrated"] <= rep["heldout"]["ece_reranker_unit"] + 0.05
     with pytest.raises(SystemExit):
         rl.fit_report(rows, {"zz"}, fake_rerank)
+
+
+# --------------------------------------------------------------------------- labelling spreadsheet
+
+openpyxl = pytest.importorskip("openpyxl")
+
+
+def _pairs_csv(tmp_path):
+    import csv
+    rows, pid = [], 1
+    for goal in ("cost10", "relieve"):
+        for kind in ("goal", "rewrite"):
+            for k, chunk in enumerate(["chunk A about cost", "chunk B about lines", f"only {kind}"]):
+                rows.append({"pair_id": pid, "goal_id": goal, "query_kind": kind, "query": f"{goal} {kind}",
+                             "doc_id": f"d{k}", "source": "s.txt", "cosine": 0.5, "rank": k + 1,
+                             "label": "", "chunk": chunk})
+                pid += 1
+    p = tmp_path / "pairs.csv"
+    with open(p, "w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=rl.FIELDS)
+        w.writeheader()
+        w.writerows(rows)
+    spec = tmp_path / "spec.json"
+    spec.write_text('{"cases": [{"name": "c", "app": "opflow", "goals": ["cost10", "relieve"]}],'
+                    ' "goals": [{"id": "cost10", "text": "Reduce cost", "target_pct": 10},'
+                    ' {"id": "relieve", "text": "Relieve overloads", "success": "no_violations"}]}')
+    return p, spec
+
+
+def test_sheet_dedups_goal_chunk_and_round_trips(tmp_path):
+    import csv
+    import json
+    pairs, spec = _pairs_csv(tmp_path)
+    xlsx = tmp_path / "sheet.xlsx"
+    res = rl.export_xlsx(pairs, spec, xlsx)
+    assert res["pairs"] == 12 and res["items"] == 8          # A, B shared by goal+rewrite; "only X" unique
+    wb = openpyxl.load_workbook(xlsx)
+    assert wb.sheetnames == ["Instructions", "Goals", "Pairs", "_meta"]
+    ws = wb["Pairs"]
+    assert [c.value for c in ws[1]] == rl.PAIR_HEADERS
+    assert "cosine" not in str([c.value for c in ws[1]]).lower()      # blind to the retriever
+    for i in range(2, ws.max_row + 1):
+        ws.cell(i, 5, 1 if "cost" in ws.cell(i, 4).value else 0)
+    ws.cell(2, 6, "note")
+    meta = {r[0]: r[1] for r in wb["_meta"].iter_rows(values_only=True)}
+    wb["Instructions"][json.loads(meta["labeller_cells"])["Name"]] = "Expert X"
+    wb.save(xlsx)
+    out = tmp_path / "labeled.csv"
+    side = rl.import_xlsx(xlsx, pairs, out)
+    rows = list(csv.DictReader(open(out, encoding="utf-8")))
+    assert len(rows) == 12 and all(r["label"] in ("0", "1") for r in rows)
+    assert all(r["label"] == ("1" if "cost" in r["chunk"] else "0") for r in rows)
+    assert side["labeller"]["Name"] == "Expert X"
+    assert sum(r["comment"] == "note" for r in rows) in (1, 2)   # a shared item carries it to both pairs
+
+
+def test_sheet_refuses_other_pairs_file_and_bad_labels(tmp_path):
+    pairs, spec = _pairs_csv(tmp_path)
+    xlsx = tmp_path / "sheet.xlsx"
+    rl.export_xlsx(pairs, spec, xlsx)
+    other = tmp_path / "other.csv"
+    other.write_text(pairs.read_text() + "\n")
+    with pytest.raises(SystemExit, match="sha256 differs"):
+        rl.import_xlsx(xlsx, other, tmp_path / "o.csv")
+    wb = openpyxl.load_workbook(xlsx)
+    wb["Pairs"].cell(2, 5, "yes")
+    wb.save(xlsx)
+    with pytest.raises(SystemExit, match="invalid labels"):
+        rl.import_xlsx(xlsx, pairs, tmp_path / "o.csv")
