@@ -465,7 +465,7 @@ def rag_metrics(journal: dict) -> dict:
     if not isinstance(rc, dict):
         return {"rag_mode": None, "rag_grader": None, "rag_grader_fallbacks": None,
                 "crag_correct": None, "crag_ambiguous": None, "crag_incorrect": None,
-                "crag_withheld": None}
+                "crag_withheld": None, "rag_calls": None, "rag_errors": None, "rag_empty": None}
     st = rc.get("stats") or {}
     return {
         "rag_mode": rc.get("mode_env") or rc.get("mode"),
@@ -473,6 +473,9 @@ def rag_metrics(journal: dict) -> dict:
         "rag_grader_fallbacks": st.get("grader_fallbacks"),
         "crag_correct": st.get("correct"), "crag_ambiguous": st.get("ambiguous"),
         "crag_incorrect": st.get("incorrect"), "crag_withheld": st.get("withheld"),
+        "rag_calls": st.get("calls"),
+        "rag_errors": st.get("retrieval_errors", st.get("errors")),
+        "rag_empty": st.get("empty"),
     }
 
 

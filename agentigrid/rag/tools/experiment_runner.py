@@ -187,6 +187,37 @@ def llm_failure(journal_path) -> str | None:
     return None
 
 
+def rag_failure(journal_path, cond) -> str | None:
+    """Why a retrieval-condition run did not actually retrieve (None = fine).
+    A failed query (embedding server unreachable) degrades silently to the
+    no-RAG baseline, so without this check the run would be labelled C1/C2a
+    while it ran as C0. Journals written before retrieval errors were counted
+    carry no telemetry and pass."""
+    if journal_path is None or not retrieval_active(cond):
+        return None
+    try:
+        rc = json.loads(Path(journal_path).read_text()).get("rag_config") or {}
+    except Exception:
+        return None
+    st = rc.get("stats") or {}
+    errs = st.get("retrieval_errors", st.get("errors"))
+    if errs:
+        return f"{errs} retrieval call(s) failed (embedding server unreachable?); the run did not get its references"
+    if rc.get("enabled") is False:
+        return "retriever was disabled (store could not be opened)"
+    return None
+
+
+def embed_preflight(host: str, model: str = "nomic-embed-text") -> str | None:
+    """None if the embedding server answers, else the reason."""
+    try:
+        from agentigrid.rag.embed import embed
+        v = embed("preflight", host, model, timeout=20)
+        return None if v else "empty embedding"
+    except Exception as exc:
+        return f"{type(exc).__name__}: {exc}"
+
+
 def resolve_guards(guards, case_path, project_root: Path):
     """Resolve symbolic guard arguments against the case file. Currently:
     {"vband_not_widened": "case"} -> [min Vmin, max Vmax] of the case's buses,
@@ -278,20 +309,24 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
         shutil.copy2(journal_src, journal_dst)
 
     llm_problem = llm_failure(journal_dst)
+    rag_problem = rag_failure(journal_dst, cond)
     manifest.update({
         "llm_problem": llm_problem,
+        "rag_problem": rag_problem,
         "start_ts": datetime.fromtimestamp(start).isoformat(),
         "wall_s": wall, "exit_code": exit_code, "timed_out": timed_out,
         "journal_src": str(journal_src) if journal_src else None,
         "journal_file": str(journal_dst) if journal_dst else None,
         "log_file": str(log_path),
-        "status": ("ok" if (exit_code == 0 and journal_dst and not llm_problem)
-                   else "llm_error" if llm_problem else "failed"),
+        "status": ("ok" if (exit_code == 0 and journal_dst and not llm_problem and not rag_problem)
+                   else "llm_error" if llm_problem else "rag_error" if rag_problem else "failed"),
     })
     manifest_path.write_text(json.dumps(manifest, indent=2))
     flag = "ok " if manifest["status"] == "ok" else "FAIL"
     if llm_problem:
         print(f"  [LLM] {run_id}: {llm_problem}")
+    if rag_problem:
+        print(f"  [RAG] {run_id}: {rag_problem}")
     print(f"  [{flag}] {run_id}  ({wall}s, exit={exit_code}, journal={'yes' if journal_dst else 'NONE'})")
     return manifest
 
@@ -352,6 +387,15 @@ def main() -> int:
         if not (args.allow_unfrozen_corpus or args.dry_run):
             print("Refusing to start: of-record retrieval runs need the frozen corpus. "
                   "Freeze + ingest, or pass --allow-unfrozen-corpus for a pilot.")
+            return 2
+
+    if any(retrieval_active(c) for c in conditions) and not args.dry_run:
+        host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+        why = embed_preflight(host)
+        if why:
+            print(f"Embedding server at {host} is not answering ({why}).\n"
+                  "Retrieval conditions would silently run without references. Start Ollama "
+                  "(with nomic-embed-text) and set OLLAMA_HOST, then run again.")
             return 2
 
     cases = list(spec["cases"])

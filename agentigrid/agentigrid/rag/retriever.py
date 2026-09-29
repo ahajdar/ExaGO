@@ -12,7 +12,10 @@ matches are dropped instead of always returning `k` chunks.
 """
 from __future__ import annotations
 
+import logging
 from typing import Optional
+
+logger = logging.getLogger("agentigrid.rag")
 
 
 class Retriever:
@@ -27,6 +30,10 @@ class Retriever:
         min_score: float = 0.35,
     ):
         self.enabled = enabled
+        # Per-session retrieval telemetry (journaled via describe()): a failed
+        # query (e.g. embedding server down) silently degrades to the no-RAG
+        # baseline, so errors must be counted or a retrieval run is mislabelled.
+        self.stats = {"calls": 0, "errors": 0, "empty": 0}
         self.k = k
         self.min_score = min_score
         self.store_path = path
@@ -47,12 +54,17 @@ class Retriever:
         """
         if not self.enabled or self._store is None or not query:
             return ""
+        self.stats["calls"] += 1
         try:
             hits = self._store.query(query, k or self.k)
-        except Exception:
+        except Exception as exc:
+            self.stats["errors"] += 1
+            logger.warning("Retrieval failed (%s: %s); this iteration runs without references",
+                           type(exc).__name__, exc)
             return ""  # retrieval must never break a run
         hits = [(doc, meta, score) for (doc, meta, score) in hits if score >= self.min_score]
         if not hits:
+            self.stats["empty"] += 1
             return ""
         lines = [
             f"[ref {i + 1} | score {score:.2f}] {doc}"
@@ -72,6 +84,7 @@ class Retriever:
             "min_score": self.min_score,
             "store_path": self.store_path,
             "collection": self.collection,
+            "stats": dict(self.stats),
         }
 
     def query_hits(self, query: str, k: Optional[int] = None) -> list[tuple[str, dict, float]]:
@@ -83,7 +96,9 @@ class Retriever:
             return []
         try:
             return self._store.query(query, k or self.k)
-        except Exception:
+        except Exception as exc:
+            self.stats["errors"] += 1
+            logger.warning("Retrieval failed (%s: %s)", type(exc).__name__, exc)
             return []
 
     def embed_text(self, text: str) -> list[float]:

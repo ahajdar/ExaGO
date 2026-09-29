@@ -201,6 +201,7 @@ It writes `stats.json` and `stats.csv` next to `per_run.csv`. The script pairs r
 | G10 | Hosted-model parameters differ between models | Some models reject `temperature`; the backend retries without it and records `temperature_sent: false` in `llm_usage`. The output-token cap is fixed at 16000 for every condition (spec-level `env`) and recorded as `llm_usage.max_tokens`. |
 | G11 | You are tempted to add ACTIVSg200 or case39 material to the corpus | Don't. That is a hold-out leak (worked answers to the evaluated tasks). `corpus_guard.py` refuses to freeze such a corpus. |
 | G12 | `case39-opflow` fails with "file not found" | `data/` is git-ignored; copy `../datafiles/case39.m` into `data/` (section 1). |
+| G13 | Ollama stops mid-campaign (window closed, laptop restarted) | Local-model runs fail as `llm_error`. Retrieval runs used to fall back silently to no references and still be marked `ok`. Since patch 0037, the runner refuses to start when the embedding server doesn't answer, and it marks a retrieval run whose queries failed as `rag_error`, so a re-run redoes it. Keep the Ollama window open for the whole campaign. |
 
 ---
 

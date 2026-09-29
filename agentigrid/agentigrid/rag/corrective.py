@@ -117,7 +117,8 @@ class CorrectiveRetriever:
             "strip_min_score": self.strip_min_score,
             "grader": self._grader_name(),
             "grader_detail": self._grader_detail(),
-            "stats": dict(self.stats),
+            "stats": {**dict(self.stats),
+                      "retrieval_errors": getattr(self._base, "stats", {}).get("errors", 0)},
         }
 
     def _grader_detail(self) -> Optional[dict]:
