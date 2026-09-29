@@ -98,6 +98,14 @@ inject byte-identical context. The full blocks go to `experiments/retrieval_prev
 Where two conditions inject identical context for a goal, their runs on that goal
 differ only by sampling noise.
 
+Precision@3 of what C1 injects (15 judgments, one annotator, blind to scores):
+
+```bash
+python rag/tools/precision_at_k.py sheet --preview experiments/retrieval_preview.json --out labels/precision_at3.xlsx
+# fill the yellow Label cells (1/0) on the Items sheet and save
+python rag/tools/precision_at_k.py score --labels labels/precision_at3.xlsx --out experiments/precision_at3.json
+```
+
 
 ```bash
 python rag/tools/experiment_runner.py --spec grader_ablation_spec.json --dry-run | tail -5
