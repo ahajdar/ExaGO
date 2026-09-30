@@ -17,6 +17,8 @@ C2b (corrective with the local cross-encoder `BAAI/bge-reranker-base`) is implem
 
 ---
 
+To run on a second machine, or to split the campaign by model across machines, see [RUNNING_ON_ANOTHER_MACHINE.md](RUNNING_ON_ANOTHER_MACHINE.md).
+
 ## 1. Prerequisites
 
 | Need | Check |
