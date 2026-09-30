@@ -60,3 +60,27 @@ def test_runner_flags_rag_errors_only_for_retrieval_conditions(tmp_path):
 
 def test_embed_preflight_reports_unreachable_host():
     assert er.embed_preflight("http://127.0.0.1:9") is not None
+
+
+def test_chunking_keeps_worked_examples_whole():
+    from agentigrid.rag.ingest import chunk
+    example = "Goal: lower cost\nStep applied: x\nCorrect response (JSON): " + '{"a": 1}, ' * 180 + "\nResult: ok"
+    assert 800 < len(example) < 3000
+    assert chunk(example + "\n\nsecond paragraph") == [example, "second paragraph"]
+    long = "y" * 7000
+    parts = chunk(long)
+    assert len(parts) == 3 and all(len(p) <= 3000 for p in parts)
+
+
+def test_status_refuses_store_with_other_chunking(tmp_path):
+    from agentigrid.rag.corpus_hash import CHUNKING, INGEST_MANIFEST_NAME, MANIFEST_NAME, corpus_hash, corpus_status
+    corpus, store = tmp_path / "corpus", tmp_path / "store"
+    corpus.mkdir(); store.mkdir()
+    (corpus / "a.txt").write_text("hello")
+    digest, _ = corpus_hash(corpus)
+    (corpus / MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest}))
+    (store / INGEST_MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest}))          # v1 store
+    st = corpus_status(corpus, store)
+    assert not st["ok"] and "chunking" in st["reason"]
+    (store / INGEST_MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest, "chunking": dict(CHUNKING)}))
+    assert corpus_status(corpus, store)["ok"]

@@ -16,8 +16,13 @@ import sys
 from .store import VectorStore
 
 
-def chunk(text: str, size: int = 800, overlap: int = 100) -> list[str]:
-    """Paragraph-first chunking; long paragraphs are wrapped with overlap."""
+def chunk(text: str, size: int | None = None, overlap: int | None = None) -> list[str]:
+    """Paragraph-first chunking; only paragraphs longer than ``size`` are wrapped
+    (with ``overlap``). Defaults come from corpus_hash.CHUNKING, so every worked
+    example and schema exemplar (one paragraph each) stays a single chunk."""
+    from .corpus_hash import CHUNKING
+    size = CHUNKING["size"] if size is None else size
+    overlap = CHUNKING["overlap"] if overlap is None else overlap
     out: list[str] = []
     for para in text.split("\n\n"):
         para = para.strip()
@@ -44,14 +49,17 @@ def ingest(
     import json
     from pathlib import Path
 
-    from .corpus_hash import INGEST_MANIFEST_NAME, corpus_files, corpus_hash
+    from .corpus_hash import CHUNKING, INGEST_MANIFEST_NAME, corpus_files, corpus_hash
 
     store = VectorStore(store_path, collection, host, model)
     store.reset()
-    n = 0
+    n, wrapped, longest = 0, 0, 0
     for p in corpus_files(Path(corpus_dir)):
         path = str(p)
         text = open(path, encoding="utf-8", errors="ignore").read()
+        for para in (q.strip() for q in text.split("\n\n")):
+            longest = max(longest, len(para))
+            wrapped += len(para) > CHUNKING["size"]
         for i, c in enumerate(chunk(text)):
             store.add(f"{path}#{i}", c, {"source": os.path.basename(path)})
             n += 1
@@ -59,10 +67,13 @@ def ingest(
     Path(store_path, INGEST_MANIFEST_NAME).write_text(json.dumps({
         "corpus_dir": str(corpus_dir), "corpus_sha256": digest, "files": len(per_file),
         "chunks": n, "collection": collection, "embed_model": model,
+        "chunking": {**CHUNKING, "wrapped_paragraphs": wrapped, "longest_paragraph_chars": longest},
         "ingested_at": datetime.datetime.now().isoformat(),
     }, indent=2) + "\n")
     print(f"Ingested {n} chunks from {len(per_file)} file(s); collection '{collection}' holds "
           f"{store.count()}; corpus sha256 {digest}.")
+    print(f"Chunking {CHUNKING['scheme']}: longest paragraph {longest} chars; "
+          f"{wrapped} paragraph(s) longer than {CHUNKING['size']} were split.")
 
 
 if __name__ == "__main__":

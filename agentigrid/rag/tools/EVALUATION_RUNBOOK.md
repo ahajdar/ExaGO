@@ -10,10 +10,9 @@ Conditions (identical in the paper and the spec):
 | Id | Retrieval | Grader |
 |---|---|---|
 | C0-norag | off | — |
-| C1-basic | basic top-k | — |
-| C2a-crag-cosine | corrective | cosine similarity |
+| C1-basic | basic top-3 retrieval | — |
 
-C2b (corrective with the local cross-encoder `BAAI/bge-reranker-base`) is implemented but not in the of-record spec. On corpus v1 the retrieval preview (section 3) showed it would inject the same text as C2a on 4 of 5 goals and add only a hedge sentence on the fifth. Grader comparison, human relevance labels and calibration (C2c) are deferred to the next paper; the tools in section 7 stay for that.
+Corrective retrieval (C2a with the cosine grader, C2b with the local cross-encoder `BAAI/bge-reranker-base`) is implemented but not in the of-record spec. On corpus v1 the retrieval preview showed the following. The cosine grader rates every goal CORRECT, so corrective retrieval never re-queries or withholds. Its only effect is to split the three retrieved chunks into re-sorted lines, which separates each worked example's goal, step and JSON, and the reranker changes one verdict. The preview is the result; the runs are left to the follow-up paper. Run `retrieval_preview.py --with-corrective` to reproduce it.
 
 ---
 
@@ -56,7 +55,7 @@ own:
 ```bash
 export OLLAMA_HOST=http://localhost:11434      # WSL with Ollama on Windows: see gotcha G1
 python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus   # expect "0 finding(s)"
-python -m agentigrid.rag.ingest rag/corpus
+python -m agentigrid.rag.ingest rag/corpus      # chunking v2: every worked example stays one chunk
 python -c "from agentigrid.rag.corpus_hash import corpus_status as s; print(s('rag/corpus','rag/store'))"
 ```
 
@@ -92,7 +91,7 @@ every iteration and repetition. Preview those blocks first; it needs no LLM and
 no solver:
 
 ```bash
-python rag/tools/retrieval_preview.py --spec grader_ablation_spec.json
+python rag/tools/retrieval_preview.py --spec grader_ablation_spec.json --with-corrective
 ```
 
 It prints each corrective condition's verdict per goal and which conditions
@@ -183,7 +182,7 @@ Pre-registered hypothesis tests (paper Section IV-G, Table VI):
 python rag/tools/experiment_stats.py --per-run experiments/ofrecord_v2/analysis/per_run.csv
 ```
 
-It writes `stats.json` and `stats.csv` next to `per_run.csv`. The script pairs runs by case, goal, model and repetition. The primary family is pooled over models and Holm-corrected: C1 vs C0 on validity, attainment and cost Δ% (cost goals), and C2a vs C1 on validity. The same contrasts per model form a second Holm family. The script also runs a Kruskal–Wallis test for H2 and the H3 relative-reduction rule with bootstrap confidence intervals. It needs the standard library only and uses a fixed seed.
+It writes `stats.json` and `stats.csv` next to `per_run.csv`. The script pairs runs by case, goal, model and repetition. The primary family is pooled over models and Holm-corrected: C1 vs C0 on validity, attainment and cost Δ% (cost goals). The same contrasts per model form a second Holm family. The script also runs a Kruskal–Wallis test for H2 and the H3 rule (absolute reductions, with relative ones as secondary) with bootstrap confidence intervals. It needs the standard library only and uses a fixed seed.
 
 ---
 

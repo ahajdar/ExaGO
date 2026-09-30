@@ -15,6 +15,13 @@ CORPUS_SUFFIXES = (".txt", ".md")          # what ingest indexes
 MANIFEST_NAME = "corpus_manifest.json"     # written by corpus_guard --freeze
 INGEST_MANIFEST_NAME = "ingest_manifest.json"  # written by ingest into the store dir
 
+# How ingest splits the corpus into chunks. Part of the store's identity: the same
+# corpus chunked differently retrieves different text, so the runner refuses a
+# store built with another scheme. v2 keeps every paragraph (one worked example,
+# one schema exemplar) whole up to CHUNK_SIZE characters; v1 (800/100) cut most
+# worked examples mid-JSON.
+CHUNKING = {"scheme": "paragraph-v2", "size": 3000, "overlap": 200}
+
 
 def corpus_files(corpus_dir: Path) -> list[Path]:
     corpus_dir = Path(corpus_dir)
@@ -54,8 +61,14 @@ def corpus_status(corpus_dir: Path, store_dir: Path) -> dict:
     if not ipath.exists():
         out["reason"] = f"store not built by the current ingest ({ipath} missing; re-run ingest)"
         return out
-    if json.loads(ipath.read_text()).get("corpus_sha256") != digest:
+    ing = json.loads(ipath.read_text())
+    if ing.get("corpus_sha256") != digest:
         out["reason"] = "store was built from a different corpus version (re-run ingest)"
+        return out
+    built = ing.get("chunking") or {}
+    if {k: built.get(k) for k in CHUNKING} != CHUNKING:
+        out["reason"] = (f"store was built with different chunking ({built or 'v1, 800/100'}; "
+                         f"current {CHUNKING}); re-run ingest")
         return out
     out["ok"] = True
     return out

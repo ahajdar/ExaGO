@@ -199,7 +199,7 @@ def test_bootstrap_goals_declare_guards_and_model_is_outside_eval_set():
 
 
 def test_corpus_status_tracks_freeze_and_ingest(tmp_path):
-    from agentigrid.rag.corpus_hash import INGEST_MANIFEST_NAME, corpus_hash, corpus_status
+    from agentigrid.rag.corpus_hash import CHUNKING, INGEST_MANIFEST_NAME, corpus_hash, corpus_status
     corpus, store = tmp_path / "corpus", tmp_path / "store"
     corpus.mkdir(); store.mkdir()
     (corpus / "a.txt").write_text("alpha")
@@ -207,7 +207,7 @@ def test_corpus_status_tracks_freeze_and_ingest(tmp_path):
     assert guard.main([str(corpus), "--freeze"]) == 0
     assert "store not built" in corpus_status(corpus, store)["reason"]
     digest, _ = corpus_hash(corpus)
-    (store / INGEST_MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest}))
+    (store / INGEST_MANIFEST_NAME).write_text(json.dumps({"corpus_sha256": digest, "chunking": dict(CHUNKING)}))
     st = corpus_status(corpus, store)
     assert st["ok"] and st["corpus_sha256"] == digest
     (corpus / "a.txt").write_text("alpha changed")

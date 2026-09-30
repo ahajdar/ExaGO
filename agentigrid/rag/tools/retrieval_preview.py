@@ -82,6 +82,12 @@ def _verdict(before: dict, after: dict) -> str:
     return s
 
 
+ASSESSED = [   # corrective conditions assessed by the preview, not run (paper Section III-F)
+    {"id": "C2a-crag-cosine", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "cosine"}},
+    {"id": "C2b-crag-reranker", "env": {"AGENTIGRID_RAG_MODE": "corrective", "AGENTIGRID_CRAG_GRADER": "reranker"}},
+]
+
+
 def preview(spec: dict, host: str, build=None) -> dict:
     if build is None:
         from agentigrid.rag import build_retriever as build
@@ -142,8 +148,14 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spec", default="grader_ablation_spec.json")
     ap.add_argument("--out", default="experiments/retrieval_preview.json")
+    ap.add_argument("--with-corrective", action="store_true",
+                    help="also preview C2a (cosine) and C2b (reranker; needs sentence-transformers), "
+                         "which are assessed here but not in the run matrix")
     args = ap.parse_args(argv)
     spec = json.loads(Path(args.spec).read_text())
+    if args.with_corrective:
+        have = {c["id"] for c in spec.get("conditions", [])}
+        spec["conditions"] = list(spec.get("conditions", [])) + [c for c in ASSESSED if c["id"] not in have]
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     res = preview(spec, host)
     res["spec"] = args.spec

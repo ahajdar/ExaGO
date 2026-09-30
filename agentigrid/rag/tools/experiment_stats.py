@@ -61,9 +61,8 @@ PRIMARY = [
     ("H1", "C1", "C0", "valid_proposal_rate", None),
     ("H1", "C1", "C0", "goal_attained", None),
     ("H1", "C1", "C0", "cost_improvement_pct", COST_GOALS),
-    ("H1", "C2a", "C1", "valid_proposal_rate", None),
 ]
-RETRIEVAL = ("C1", "C2a")
+RETRIEVAL = ("C1",)   # C2a/C2b were assessed by the retrieval preview and not run
 
 
 # ----------------------------------------------------------------------------- statistics
