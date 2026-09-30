@@ -425,7 +425,16 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
 
     attempts = manifest.get("max_iter") or (max((e.get("iteration", 0) for e in entries), default=0))
     n_mods = sum(1 for e in non_base if has_modification(e))
-    valid_rate = round(n_mods / attempts, 3) if attempts else None
+    # Primary validity (amended before the of-record runs): modifications over the
+    # LLM iterations the run actually used, not counting the final 'complete' step
+    # or iterations lost to the harness (API errors, truncated output). A model
+    # that makes one correct change and stops scores 1.0 instead of 1/max_iter.
+    vm = validator_metrics(journal, entries)
+    n_complete = sum(1 for e in dict_entries
+                     if e.get("convergence_status") == "COMPLETE" and e.get("iteration", 0) != 0)
+    used = vm["llm_iterations"] - n_complete
+    valid_rate = round(n_mods / used, 3) if used > 0 else None
+    valid_rate_maxiter = round(n_mods / attempts, 3) if attempts else None
 
     any_feasible = any(e.get("feasible") for e in solves)
     attain = attainment_for(entries, goal, bc)
@@ -439,7 +448,9 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         "n_solve_iters": len(non_base),
         "n_modifications": n_mods,
         "attempts": attempts,
+        "llm_iterations_used": used,
         "valid_proposal_rate": valid_rate,
+        "valid_proposal_rate_maxiter": valid_rate_maxiter,
         "any_feasible": int(bool(any_feasible)),
         **attain,
         "iterations_recorded": len(entries),
@@ -448,7 +459,7 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
                         if isinstance(journal, dict) and "rag_enabled" in journal
                         else manifest.get("condition_env", {}).get("AGENTIGRID_RAG")),
         **intent_metrics(entries, goal),
-        **validator_metrics(journal, entries),
+        **vm,
         **usage_metrics(journal),
         **rag_metrics(journal),
     }
@@ -545,7 +556,7 @@ def collect_journals(pattern: str):
     return rows
 
 
-NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "solve_elapsed_s",
+NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "valid_proposal_rate_maxiter", "solve_elapsed_s",
            "llm_prompt_tokens", "llm_completion_tokens",
            "llm_cache_creation_tokens", "llm_cache_read_tokens",
            "n_solve_iters", "wall_s",

@@ -322,3 +322,16 @@ def test_truncated_outputs_excluded_from_validator_rate():
     m = ev.validator_metrics(journal, entries)
     assert m["llm_iterations"] == 2 and m["validator_rejections"] == 1
     assert m["discarded_truncated"] == 1 and m["discarded_internal"] == 0
+
+
+def test_valid_rate_counts_used_iterations_not_the_cap():
+    base = _pf(0)
+    mod = _pf(1)                                           # one applied change
+    done = {"iteration": 2, "convergence_status": "COMPLETE", "commands": [], "mode": "complete"}
+    m = ev.metrics_for({"entries": [base, mod, done], "discarded_actions": []},
+                       {"success": "no_violations", "max_iter": 4})
+    assert m["valid_proposal_rate"] == 1.0                 # 1 change / 1 non-completion iteration
+    assert m["valid_proposal_rate_maxiter"] == 0.25        # old definition kept as secondary
+    m = ev.metrics_for({"entries": [base, mod], "discarded_actions": [{"iteration": 2, "kind": "rejected"}]},
+                       {"success": "no_violations", "max_iter": 4})
+    assert m["valid_proposal_rate"] == 0.5                 # a rejected proposal counts against validity

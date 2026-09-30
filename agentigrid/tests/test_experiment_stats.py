@@ -80,9 +80,18 @@ def test_end_to_end_detects_strong_model_effect_and_h3(tmp_path):
     assert {r["verdict"] for r in res["h3"]} == {"supported"}          # validator rejections fall, intent flat
 
 
-def test_h3_rejected_when_intent_falls_as_much(tmp_path):
-    res = es.analyse(es.load_rows(_rows(tmp_path, intent_drop=0.3)))
+def test_h3_rejected_when_intent_falls_more(tmp_path):
+    res = es.analyse(es.load_rows(_rows(tmp_path, intent_drop=0.38)))
     assert {r["verdict"] for r in res["h3"]} == {"rejected"}
+
+
+def test_h3_defined_when_c0_intent_rate_is_zero(tmp_path):
+    rows = es.load_rows(_rows(tmp_path))
+    for r in rows:
+        r["intent_violation_rate"] = "0"
+    res = es.analyse(rows)
+    assert {r["verdict"] for r in res["h3"]} == {"supported"}          # absolute reduction still defined
+    assert all(r["rr_intent"] is None and r["ar_intent"] == 0 for r in res["h3"])
 
 
 def test_baseline_attained_cells_are_excluded(tmp_path):

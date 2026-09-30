@@ -26,13 +26,14 @@ Tests.
   * H2 interaction: for each retrieval condition vs C0, do the paired
     differences in valid_proposal_rate differ between models? Kruskal-Wallis
     across models (tie-corrected chi-square approximation).
-  * H3 (per model, each retrieval condition vs C0): relative reduction
-    RR = 1 - mean(condition) / mean(C0) for validator_rejection_rate and for
-    intent_violation_rate over the same matched units (goals with intent checks);
-    delta = RR_val - RR_int with a 95% paired-bootstrap CI (resampling matched
-    units). Verdict: "supported" if the CI lies above 0; "rejected" if
-    RR_int >= RR_val (delta <= 0, the pre-stated rejection rule); otherwise
-    "inconclusive". Undefined when C0's mean rate is 0.
+  * H3 (per model, each retrieval condition vs C0; amended before the of-record
+    runs). Primary: ABSOLUTE reduction AR = mean(C0) - mean(condition), in rate
+    points, for validator_rejection_rate and for intent_violation_rate over the
+    same matched units (goals with intent checks); delta = AR_val - AR_int with a
+    95% paired-bootstrap CI (resampling matched units). Verdict: "supported" if
+    the CI lies above 0; "rejected" if AR_int >= AR_val (delta <= 0);
+    otherwise "inconclusive". Always defined. Secondary: the relative reduction
+    RR = 1 - mean(condition) / mean(C0), reported where C0's mean is not 0.
 
 Dependency-free (standard library only), deterministic (fixed bootstrap seed).
 
@@ -270,32 +271,28 @@ def h3(units, treat, model, rng):
         if None not in v:
             vals.append(v)          # [val_t, int_t, val_0, int_0]
 
+    def ar(sample):
+        av = statistics.mean(x[2] for x in sample) - statistics.mean(x[0] for x in sample)
+        ai = statistics.mean(x[3] for x in sample) - statistics.mean(x[1] for x in sample)
+        return av, ai, av - ai
+
     def rr(sample):
         mv0 = statistics.mean(x[2] for x in sample)
         mi0 = statistics.mean(x[3] for x in sample)
-        if mv0 == 0 or mi0 == 0:
-            return None, None, None
-        rv = 1 - statistics.mean(x[0] for x in sample) / mv0
-        ri = 1 - statistics.mean(x[1] for x in sample) / mi0
-        return rv, ri, rv - ri
+        rv = 1 - statistics.mean(x[0] for x in sample) / mv0 if mv0 else None
+        ri = 1 - statistics.mean(x[1] for x in sample) / mi0 if mi0 else None
+        return rv, ri
 
     out = {"hypothesis": "H3", "contrast": f"{treat} vs C0", "model": model, "n_pairs": len(vals)}
     if not vals:
         return {**out, "verdict": "no data"}
-    rv, ri, d = rr(vals)
-    if d is None:
-        return {**out, "verdict": "undefined (C0 mean rate is 0)"}
-    boots = []
-    for _ in range(BOOT):
-        b = rr(rng.choices(vals, k=len(vals)))[2]
-        if b is not None:
-            boots.append(b)
-    boots.sort()
-    lo = boots[int(0.025 * len(boots))] if boots else None
-    hi = boots[int(0.975 * len(boots)) - 1] if boots else None
-    verdict = ("rejected" if d <= 0 else "supported" if (lo is not None and lo > 0) else "inconclusive")
-    return {**out, "rr_validator": rv, "rr_intent": ri, "delta": d, "ci_low": lo, "ci_high": hi,
-            "verdict": verdict}
+    av, ai, d = ar(vals)
+    boots = sorted(ar(rng.choices(vals, k=len(vals)))[2] for _ in range(BOOT))
+    lo, hi = boots[int(0.025 * BOOT)], boots[int(0.975 * BOOT) - 1]
+    verdict = ("rejected" if d <= 0 else "supported" if lo > 0 else "inconclusive")
+    rv, ri = rr(vals)
+    return {**out, "ar_validator": av, "ar_intent": ai, "delta": d, "ci_low": lo, "ci_high": hi,
+            "rr_validator": rv, "rr_intent": ri, "verdict": verdict}
 
 
 def analyse(rows) -> dict:
@@ -345,11 +342,12 @@ def report(res) -> str:
     L.append("\nH2 interaction (Kruskal-Wallis on paired differences across models):")
     for r in res["h2_interaction"]:
         L.append(f"  {r['contrast']:<28} H={_f(r['h'])} df={r['df']} p={_f(r['p'], 4)}")
-    L.append("\nH3 (relative reduction: validator rejections minus intent violations):")
+    L.append("\nH3 (absolute reduction vs C0, rate points: validator rejections minus intent violations):")
     for r in res["h3"]:
-        L.append(f"  {r['model']:<20} {r['contrast']:<10} n={r['n_pairs']:<4} RR_val={_f(r.get('rr_validator'))} "
-                 f"RR_int={_f(r.get('rr_intent'))} delta={_f(r.get('delta'))} "
-                 f"[{_f(r.get('ci_low'))}, {_f(r.get('ci_high'))}]  {r['verdict']}")
+        L.append(f"  {r['model']:<20} {r['contrast']:<10} n={r['n_pairs']:<4} AR_val={_f(r.get('ar_validator'))} "
+                 f"AR_int={_f(r.get('ar_intent'))} delta={_f(r.get('delta'))} "
+                 f"[{_f(r.get('ci_low'))}, {_f(r.get('ci_high'))}]  {r['verdict']}"
+                 f"   (relative: val={_f(r.get('rr_validator'))}, int={_f(r.get('rr_intent'))})")
     return "\n".join(L)
 
 
