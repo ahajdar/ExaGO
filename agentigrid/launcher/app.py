@@ -196,7 +196,7 @@ def render_sidebar() -> dict:
         data_files = scan_data_files()
 
         if not data_files:
-            st.warning("No .m files found in data/ directory")
+            st.warning("No .m files found in data/exago/ directory")
             selected_file = None
         else:
             display_names = [f.name for f in data_files]
@@ -322,7 +322,7 @@ def render_sidebar() -> dict:
                 st.caption(f"`{ctgc_file}`")
             else:
                 st.warning(
-                    "No .cont files found in data/ directory. "
+                    "No .cont files found in data/exago/ directory. "
                     "SCOPFLOW requires a contingency file."
                 )
 
@@ -354,7 +354,7 @@ def render_sidebar() -> dict:
                 st.caption(f"`{pload_profile}`")
             else:
                 st.warning(
-                    "No *_load_P.csv files found in data/ directory. "
+                    "No *_load_P.csv files found in data/exago/ directory. "
                     "TCOPFLOW requires an active load profile."
                 )
 
@@ -370,7 +370,7 @@ def render_sidebar() -> dict:
                 st.caption(f"`{qload_profile}`")
             else:
                 st.warning(
-                    "No *_load_Q.csv files found in data/ directory. "
+                    "No *_load_Q.csv files found in data/exago/ directory. "
                     "TCOPFLOW requires a reactive load profile."
                 )
 
@@ -440,7 +440,7 @@ def render_sidebar() -> dict:
                 st.caption(f"`{scenario_file}`")
             else:
                 st.warning(
-                    "No scenario files found in data/ directory. "
+                    "No scenario files found in data/exago/ directory. "
                     "SOPFLOW requires a wind scenario file."
                 )
 
