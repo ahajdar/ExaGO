@@ -37,7 +37,7 @@ from charts import (
 )
 
 from agentigrid.parsers import parse_matpower, network_summary
-from agentigrid.engine.journal import NON_SOLVE_STATUSES
+from agentigrid.engine.journal import NON_SOLVE_STATUSES, format_iteration_count
 
 # ── Page Configuration ───────────────────────────────────────────────────────
 
@@ -1063,7 +1063,9 @@ def render_live_monitor():
 
         # Progress Stats
         st.markdown("---")
-        n_iters = len(st.session_state.iteration_log)
+        _its = {e.get("iteration") for e in st.session_state.iteration_log}
+        _n_agent = sum(1 for i in _its if isinstance(i, int) and i >= 1)
+        n_iters = f"{_n_agent} + base case" if 0 in _its else str(_n_agent)
         feasible_count = sum(
             1 for e in st.session_state.iteration_log if e.get("feasible")
         )
@@ -1474,7 +1476,7 @@ def _render_overview_tab(session):
 
     mc1, mc2, mc3, mc4, mc5 = st.columns(5)
     mc1.metric("Application", f"{session.application}")
-    mc2.metric("Iterations", f"{stats['total_iterations']}")
+    mc2.metric("Iterations", format_iteration_count(stats))
     mc3.metric("Duration", duration_str)
     mc4.metric("Termination", session.termination_reason)
     mc5.metric("Tokens", f"{total_tokens:,}" if total_tokens > 0 else "—")

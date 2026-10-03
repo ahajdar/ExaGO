@@ -31,7 +31,7 @@ from agentigrid.engine.explore import (
     compute_pareto_labels,
     format_variant_results,
 )
-from agentigrid.engine.journal import JournalEntry, ObjectiveEntry, SearchJournal
+from agentigrid.engine.journal import JournalEntry, ObjectiveEntry, SearchJournal, format_iteration_count
 from agentigrid.engine.metric_extractor import available_metrics, available_metrics_for_app, extract_all_metrics
 from agentigrid.engine.modifier import apply_modifications, build_index_maps
 from agentigrid.engine import sweep_metrics
@@ -4912,7 +4912,7 @@ class AgentLoopController:
         print(f"  Application:    {session.application}")
         print(f"  Backend:        {self._backend.name()} ({self._config.llm.model})")
         print(
-            f"  Iterations:     {stats['total_iterations']} "
+            f"  Iterations:     {format_iteration_count(stats)} "
             f"(of max {self._config.search.max_iterations})"
         )
         print(f"  Duration:       {elapsed_seconds:.1f} seconds")

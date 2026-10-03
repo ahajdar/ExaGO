@@ -1133,6 +1133,22 @@ class SearchJournal:
     # Summary statistics
     # ------------------------------------------------------------------
 
+    def _iteration_counts(self) -> tuple[int, bool]:
+        """Agent iterations actually run, and whether a base case was solved.
+
+        ``total_iterations`` counts journal entries: it includes the base-case
+        solve (iteration 0) and leaves out iterations whose LLM output was
+        rejected (they are kept in ``discarded_actions``, not as entries).
+        This counts distinct iteration numbers >= 1 across both, which is the
+        number of agent iterations the user asked for and the run performed.
+        """
+        numbers = {e.iteration for e in self._entries}
+        for d in getattr(self, "discarded_actions", None) or []:
+            it = d.get("iteration") if isinstance(d, dict) else None
+            if isinstance(it, int):
+                numbers.add(it)
+        return sum(1 for n in numbers if n >= 1), 0 in numbers
+
     def summary_stats(
         self,
         best_iteration_override: int | None = None,
@@ -1152,9 +1168,12 @@ class SearchJournal:
             feasible_count, infeasible_count, objective_trend,
             voltage_range_trend, goal_type.
         """
+        llm_iterations, has_base_case = self._iteration_counts()
         if not self._entries:
             return {
                 "total_iterations": 0,
+                "llm_iterations": llm_iterations,
+                "has_base_case": has_base_case,
                 "best_objective": None,
                 "best_iteration": None,
                 "best_bus": None,
@@ -1212,6 +1231,8 @@ class SearchJournal:
 
         return {
             "total_iterations": len(self._entries),
+            "llm_iterations": llm_iterations,
+            "has_base_case": has_base_case,
             "best_objective": best_objective,
             "best_iteration": best_iteration,
             "best_bus": best_bus,
@@ -1266,3 +1287,15 @@ class SearchJournal:
                     if best is None or c < best[0]:
                         best = (c, e.iteration, v.get("bus"))
         return best
+
+
+def format_iteration_count(stats: dict) -> str:
+    """Display form of the iteration count, e.g. ``"2 + base case"``.
+
+    Falls back to ``total_iterations`` for stats dicts written before
+    ``llm_iterations`` existed.
+    """
+    if "llm_iterations" not in stats:
+        return str(stats.get("total_iterations", 0))
+    n = stats["llm_iterations"]
+    return f"{n} + base case" if stats.get("has_base_case") else str(n)
