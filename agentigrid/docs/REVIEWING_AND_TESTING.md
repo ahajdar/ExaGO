@@ -79,8 +79,8 @@ documented step by step in `agentigrid/docs/AgentiGrid_Setup.md`. Summary:
 
    ```bash
    cd ExaGO/agentigrid && source .venv/bin/activate
-   agentigrid ./data/case39.m "Reduce total generation cost by 10%" --dry-run
-   agentigrid ./data/case39.m "Reduce total generation cost by 10%" --backend ollama --model qwen2.5:7b --max-iter 2 < /dev/null
+   agentigrid ./data/exago/examples/case39.m "Reduce total generation cost by 10%" --dry-run
+   agentigrid ./data/exago/examples/case39.m "Reduce total generation cost by 10%" --backend ollama --model qwen2.5:7b --max-iter 2 < /dev/null
    ```
 
 5. **See RAG on vs off** (the point of the branch) — build the index first (see
@@ -88,8 +88,8 @@ documented step by step in `agentigrid/docs/AgentiGrid_Setup.md`. Summary:
 
    ```bash
    GOAL="Reduce total generation cost by 10%"
-   AGENTIGRID_RAG=0 agentigrid ./data/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null
-   AGENTIGRID_RAG=1 agentigrid ./data/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null
+   AGENTIGRID_RAG=0 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null
+   AGENTIGRID_RAG=1 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null
    ```
 
 6. **Or use the UI:**

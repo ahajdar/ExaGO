@@ -1,5 +1,7 @@
 # Running the experiment on another computer
 
+> **Layout.** This version uses the per-tool layout from ORNL #133 (`applications/exago/`, `data/exago/`). The paper-1 of-record runs use the tag `paper1-of-record`, which still has the old layout (`applications/`, `data/`); follow that tag's copy of this file for those runs.
+
 This covers setting up a second machine to run, or to continue, the of-record campaign so that its runs are equivalent to those from the first machine. It complements `EVALUATION_RUNBOOK.md` (setup details, gotchas) and `docs/AgentiGrid_Setup.md` (building ExaGO).
 
 ## Setup (once per machine)
@@ -11,7 +13,7 @@ This covers setting up a second machine to run, or to continue, the of-record ca
    swap=16GB
    ```
    Leave Windows 6–8 GB for itself and Ollama. Apply with `wsl --shutdown`, then `wsl`, and check with `free -h`.
-2. **Build ExaGO** as in `docs/AgentiGrid_Setup.md`: Spack builds PETSc and Ipopt with CoinHSL, CMake builds the apps, and you symlink the binaries into `agentigrid/applications/`. PETSc takes hours. The CoinHSL tarball is licensed, so copy it from the first machine.
+2. **Build ExaGO** as in `docs/AgentiGrid_Setup.md`: Spack builds PETSc and Ipopt with CoinHSL, CMake builds the apps, and you symlink the binaries into `agentigrid/applications/exago/`. PETSc takes hours. The CoinHSL tarball is licensed, so copy it from the first machine.
 3. **Get the code at the same commit as the first machine:**
    ```bash
    git clone -b amir/agentigrid-rag <fork URL> ExaGO
@@ -25,7 +27,7 @@ This covers setting up a second machine to run, or to continue, the of-record ca
    ```
 5. **Local settings.** Copy `configs/default_config.yaml` and `env.sh` from the first machine. Adjust `exago.binary_dir` and `llm.ollama_host`, and keep `exago.mpi_np: 1`. Then:
    ```bash
-   mkdir -p data && cp ../datafiles/case39.m data/
+   # link ExaGO's example data into data/exago/examples/ (commands in data/exago/README.md)
    ```
 6. **Ollama.** Install it, then pull the models:
    ```bash

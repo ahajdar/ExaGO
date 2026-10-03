@@ -169,7 +169,7 @@ def test_evaluator_reads_usage_and_tolerates_old_journals():
     import importlib.util
     from pathlib import Path
 
-    path = Path(__file__).resolve().parents[1] / "rag" / "tools" / "experiment_eval.py"
+    path = Path(__file__).resolve().parents[2] / "rag" / "tools" / "experiment_eval.py"
     spec = importlib.util.spec_from_file_location("experiment_eval", path)
     ev = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ev)

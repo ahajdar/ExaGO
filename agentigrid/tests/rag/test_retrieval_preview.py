@@ -6,7 +6,7 @@ import importlib.util
 import os
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("retrieval_preview", ROOT / "rag" / "tools" / "retrieval_preview.py")
 rp = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rp)

@@ -9,7 +9,7 @@ from pathlib import Path
 from agentigrid.rag.corrective import CorrectiveRetriever
 from agentigrid.rag.retriever import Retriever
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("experiment_runner", ROOT / "rag" / "tools" / "experiment_runner.py")
 er = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(er)

@@ -4,7 +4,7 @@
 
 **How the pieces fit** (verified against the repo):
 - `agentigrid/` is a **folder inside the ExaGO repo** — not a separate repo. So there is **one checkout** of ExaGO at one branch.
-- AgentiGrid is a **Python package** that shells out to ExaGO's compiled **app binaries** (`opflow`, `scopflow`, `tcopflow`, `sopflow`, `dcopflow`, `pflow`) as **CLI subprocesses** (confirmed in its architecture doc). You build ExaGO's apps once, then symlink those binaries into `agentigrid/applications/`.
+- AgentiGrid is a **Python package** that shells out to ExaGO's compiled **app binaries** (`opflow`, `scopflow`, `tcopflow`, `sopflow`, `dcopflow`, `pflow`) as **CLI subprocesses** (confirmed in its architecture doc). You build ExaGO's apps once, then symlink those binaries into `agentigrid/applications/exago/`.
 - AgentiGrid's UI is a **Streamlit launcher** (`agentigrid/launcher/`) that invokes the LLM (Anthropic/OpenAI/Ollama) itself. It does **not** use ExaGO's `pyexago` bindings — so we build ExaGO with `-DEXAGO_ENABLE_PYTHON=OFF` (avoids the `mpi4py` dependency) and lose nothing.
 - Dependencies (PETSc, Ipopt, MPI, …) come from **Spack**, which ExaGO bundles as a submodule.
 
@@ -218,7 +218,7 @@ find "$EXAGO_DIR/build" -type f -executable -name "opflow"
 
 ## 5. Wire the ExaGO binaries into AgentiGrid
 
-AgentiGrid looks for the apps in `agentigrid/applications/`. **First find where the build put them** — on this branch it is *not* `build/bin`:
+AgentiGrid looks for the apps in `agentigrid/applications/exago/`. **First find where the build put them** — on this branch it is *not* `build/bin`:
 
 ```bash
 export BIN_DIR="$(dirname "$(find "$EXAGO_DIR/build" -type f -executable -name opflow | head -1)")"
@@ -230,20 +230,17 @@ Then symlink from that real location (source of truth stays in the build tree):
 ```bash
 cd "$EXAGO_DIR/agentigrid"
 for app in opflow scopflow tcopflow sopflow dcopflow pflow; do
-  ln -sf "$BIN_DIR/$app" "applications/$app"
+  ln -sf "$BIN_DIR/$app" "applications/exago/$app"
 done
-ls -l applications/          # arrows must be white/valid, not red/broken
+ls -l applications/exago/    # arrows must be white/valid, not red/broken
 ```
 
 *Alternative:* instead of symlinks, set `exago.binary_dir` in the config (Step 6) to the `BIN_DIR` path.
 
-**Populate `data/` with case files.** `agentigrid/data/` ships with only a `README.md`; ExaGO's own `datafiles/` has plenty. Copy a few (note: under `datafiles/test_validation/`, some `.m` names are *directories* — use the single-file ones in `datafiles/` root):
+**Populate `data/exago/` with case files.** Link ExaGO's own `datafiles/` into `data/exago/examples/` with the commands in `data/exago/README.md`; put your own case files in `data/exago/datafiles/`. Check:
 ```bash
 cd "$EXAGO_DIR/agentigrid"
-cp "$EXAGO_DIR/datafiles/case_ACTIVSg200.m"    data/   # 200-bus synthetic case
-cp "$EXAGO_DIR/datafiles/case_ACTIVSg200.cont" data/   # its contingency file (SCOPFLOW)
-cp "$EXAGO_DIR/datafiles/case39.m"             data/   # small 39-bus case
-ls -l data/*.m
+ls -l data/exago/examples/case_ACTIVSg200.m data/exago/examples/case_ACTIVSg200.cont data/exago/examples/case39.m
 ```
 
 ---
@@ -259,7 +256,7 @@ pip install -e .          # installs the `agentigrid` CLI + its pinned dependenc
 ```
 
 ### Create the real configs (the repo ships only `.template` files)
-`configs/` contains `*.template` files — copy to real names. The default template is already set to `backend: anthropic` and `binary_dir: ./applications`:
+`configs/` contains `*.template` files — copy to real names. The default template is already set to `backend: anthropic` and `binary_dir: ./applications/exago`:
 ```bash
 cd "$EXAGO_DIR/agentigrid"
 cp configs/default_config.yaml.template configs/default_config.yaml
@@ -335,19 +332,19 @@ Always activate the venv and have the key set first (`source .venv/bin/activate`
 
 **Step 1 — dry-run** (validates config, `env_setup.sh`, binary resolution, base-case parse; no LLM call):
 ```bash
-agentigrid ./data/case_ACTIVSg200.m "test" --dry-run
+agentigrid ./data/exago/examples/case_ACTIVSg200.m "test" --dry-run
 ```
 Ends with `Dry-run complete — exiting.` and prints the resolved config.
 
 **Step 2 — real run** (calls the LLM and runs `opflow` each iteration):
 ```bash
-agentigrid ./data/case_ACTIVSg200.m \
+agentigrid ./data/exago/examples/case_ACTIVSg200.m \
   "Find the maximum uniform load scaling factor before the system becomes infeasible" \
   --max-iter 3
 ```
 A healthy run shows the base case solving, e.g.:
 ```
-[Iter 0] Running: .../applications/opflow -netfile .../case_ACTIVSg200.m -print_output
+[Iter 0] Running: .../applications/exago/opflow -netfile .../case_ACTIVSg200.m -print_output
 Simulation succeeded in 0.0s (exit 0)
 [Iter 0] Base case: CONVERGED, cost=$27,557.57
 ```
@@ -356,7 +353,7 @@ then the LLM proposing changes and `opflow` re-running each iteration.
 Interactive wrapper (prompts for your goal) and positional args also work:
 ```bash
 ./run_agentigrid.sh                                                  # prompts interactively
-./run_agentigrid.sh configs/default_config.yaml ./data/case39.m 10   # config, case, max-iter
+./run_agentigrid.sh configs/default_config.yaml ./data/exago/examples/case39.m 10   # config, case, max-iter
 ```
 
 Optional test suite:
@@ -404,7 +401,7 @@ resume
 
 **Save / resume across runs (CLI flags):**
 ```bash
-agentigrid ./data/case_ACTIVSg200.m "…goal…" --save-on-stop     # write a resumable session on stop
+agentigrid ./data/exago/examples/case_ACTIVSg200.m "…goal…" --save-on-stop     # write a resumable session on stop
 agentigrid --resume workdir/<session_dir>                        # continue a saved session
 # verbosity: --verbose  |  --quiet
 ```
@@ -460,7 +457,7 @@ curl -s http://$WIN_IP:11434/api/tags | python3 -m json.tool | grep '"name"'   #
 ```bash
 cd "$EXAGO_DIR/agentigrid"
 sed -i 's#^\( *model:\).*#\1 "mixtral:latest"#' configs/default_config.yaml
-# CLI: agentigrid ./data/case39.m "…goal…" --backend ollama --model mixtral:latest --max-iter 3
+# CLI: agentigrid ./data/exago/examples/case39.m "…goal…" --backend ollama --model mixtral:latest --max-iter 3
 ```
 Local models are slower per call and produce more `Failed to parse JSON` retries than Sonnet — keep first runs small.
 
@@ -519,7 +516,7 @@ Only worth it once AgentiGrid runs on the CPU build and `nvidia-smi` works in WS
      -DMAGMA_DIR="$(spack location -i magma)"
    make -j"$(nproc)"
    ```
-   The symlinks in `agentigrid/applications/` still point at `build/bin/`, so no re-wiring needed.
+   The symlinks in `agentigrid/applications/exago/` still point at `build/bin/`, so no re-wiring needed.
 
 ---
 
@@ -537,7 +534,7 @@ pip install chromadb
 
 mkdir -p "$AG/rag/corpus"
 # put curated .txt/.md in rag/corpus (tool help, N-1 methodology, request→spec exemplars). e.g.:
-"$AG/applications/opflow" --help > "$AG/rag/corpus/opflow_help.txt" 2>&1 || true
+"$AG/applications/exago/opflow" --help > "$AG/rag/corpus/opflow_help.txt" 2>&1 || true
 
 cd "$AG"
 export OLLAMA_HOST="http://$(ip route show default | awk '{print $3}'):11434"
@@ -569,8 +566,8 @@ python -m agentigrid.rag.ingest rag/corpus    # prints "Ingested N chunks…"
 ```bash
 cd "$AG"; export OLLAMA_HOST="http://$(ip route show default | awk '{print $3}'):11434"
 GOAL="Assess the security of the system under single-element (N-1) outages"
-AGENTIGRID_RAG=0 agentigrid ./data/case39.m "$GOAL" --backend ollama --model llama3:latest --max-iter 1 < /dev/null   # baseline
-AGENTIGRID_RAG=1 agentigrid ./data/case39.m "$GOAL" --backend ollama --model llama3:latest --max-iter 1 < /dev/null   # RAG on
+AGENTIGRID_RAG=0 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model llama3:latest --max-iter 1 < /dev/null   # baseline
+AGENTIGRID_RAG=1 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model llama3:latest --max-iter 1 < /dev/null   # RAG on
 ```
 
 ### 11d. Verifying it's live
@@ -667,7 +664,7 @@ rm -rf rag/store && python -m agentigrid.rag.ingest rag/corpus
 - **CoinHSL `ipopt requires conflicting variant values '~mumps' and '+mumps'`** → you went through the `exago` recipe, which forces `ipopt~mumps`. Install `ipopt`/`coinhsl` **directly** (Phase 3c).
 - **CoinHSL `-Dlibblas=mkl_scalapack_lp64` / BLAS weirdness** → Spack picked Intel MKL. Add `^openblas` to the CoinHSL install (Phase 3c).
 - **`openmpi is not a dependency of any root`** → with `~mumps`, Ipopt+CoinHSL needs no MPI; drop `^openmpi` from that install.
-- **AgentiGrid can't find an app** → confirm the symlinks in `applications/` resolve (`ls -l`) and aren't broken, or set `exago.binary_dir` in the config.
+- **AgentiGrid can't find an app** → confirm the symlinks in `applications/exago/` resolve (`ls -l`) and aren't broken, or set `exago.binary_dir` in the config.
 - **Data file not found** → AgentiGrid expects `.m` case files under `data/`; locate them via `find "$EXAGO_DIR" -name "case_*.m"`.
 - **`agentigrid` command not found** → the venv isn't active; `source .venv/bin/activate`.
 - **CMake: `Could NOT find mpi4py`** → that's ExaGO's own Python bindings (`interfaces/python`), which AgentiGrid does not use. Add `-DEXAGO_ENABLE_PYTHON=OFF`.

@@ -13,12 +13,12 @@ Drop this folder at the project root so it sits next to `rag/`:
       rag/
         corpus/          <- output lands here
         tools/           <- put rag_harvest.py + rag_scrape_journal.py here
-      applications/      <- ExaGO binaries (symlinks)
-      data/  datafiles/  <- .m case files
+      applications/exago/ <- ExaGO binaries (symlinks)
+      data/exago/         <- .m case files (datafiles/ yours, examples/ ExaGO links)
       workdir/           <- where journal JSONs are exported
 
 Run everything **from the project root** (the same place you launch AgentiGrid),
-because the defaults are relative (`applications`, `data`, `workdir`, `rag/corpus`).
+because the defaults are relative (`applications/exago`, `data/exago`, `workdir`, `rag/corpus`).
 
 ## 1. Harvest tool + case metadata (Tier 1)
 

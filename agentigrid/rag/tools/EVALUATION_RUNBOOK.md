@@ -18,12 +18,14 @@ Corrective retrieval (C2a with the cosine grader, C2b with the local cross-encod
 
 To run on a second machine, or to split the campaign by model across machines, see [RUNNING_ON_ANOTHER_MACHINE.md](RUNNING_ON_ANOTHER_MACHINE.md).
 
+> **Layout.** This version uses the per-tool layout from ORNL #133 (`applications/exago/`, `data/exago/`). The paper-1 of-record runs use the tag `paper1-of-record`, which still has the old layout (`applications/`, `data/`); follow that tag's copy of this file for those runs.
+
 ## 1. Prerequisites
 
 | Need | Check |
 |---|---|
 | This branch (`amir/agentigrid-rag`) checked out **inside the ExaGO repo**, so `../datafiles` resolves | `ls ../datafiles/case_ACTIVSg200.cont` |
-| ExaGO built; `opflow`, `scopflow` and `pflow` reachable from `applications/` or `exago.binary_dir` | `ls applications/` |
+| ExaGO built; `opflow`, `scopflow` and `pflow` reachable from `applications/exago/` or `exago.binary_dir` | `ls applications/exago/` |
 | Python venv with AgentiGrid installed | `pip install -e . && pip install -r requirements.txt` |
 | `chromadb` (the vector store; **not** in requirements.txt) | `pip install chromadb` |
 | `sentence-transformers`, for C2b only | `pip install sentence-transformers` |
@@ -36,7 +38,8 @@ Configuration:
 ```bash
 cp configs/default_config.yaml.template configs/default_config.yaml
 cp configs/env_setup.sh.template configs/env_setup.sh     # set LD_LIBRARY_PATH / PATH for ExaGO
-mkdir -p data && cp ../datafiles/case39.m data/            # data/ is git-ignored; the spec reads ./data/case39.m
+# link ExaGO's example data into data/exago/examples/ (commands in data/exago/README.md);
+# the spec reads ./data/exago/examples/case39.m
 ```
 
 In `configs/default_config.yaml`, set `exago.binary_dir` if the binaries are not

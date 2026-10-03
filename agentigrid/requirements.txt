@@ -10,3 +10,7 @@ reportlab>=5.0
 
 # Optional: local cross-encoder grader for Corrective RAG (condition C2b)
 # sentence-transformers>=3
+
+# Optional: statistics for the experiment evaluation (rag/tools/experiment_stats.py);
+# without it, tests/evaluation/test_experiment_stats.py is skipped
+# scipy>=1.10

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("precision_at_k", ROOT / "rag" / "tools" / "precision_at_k.py")
 pk = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(pk)

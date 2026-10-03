@@ -116,6 +116,7 @@ opencode.md
 /prompts/
 env.sh
 rag/store/
+rag/store_*/
 workdir/
 logs/
 *.bak

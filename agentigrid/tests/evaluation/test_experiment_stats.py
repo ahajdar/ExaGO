@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 _spec = importlib.util.spec_from_file_location("experiment_stats", ROOT / "rag" / "tools" / "experiment_stats.py")
 es = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(es)

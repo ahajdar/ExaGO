@@ -183,11 +183,11 @@ def harvest_cases(data_dirs: list[Path], out_dir: Path) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--bin-dir", default="applications",
-                    help="Directory holding the ExaGO app binaries/symlinks (default: ./applications)")
+    ap.add_argument("--bin-dir", default="applications/exago",
+                    help="Directory holding the ExaGO app binaries/symlinks (default: ./applications/exago)")
     ap.add_argument("--data-dir", action="append", default=None,
                     help="Directory to scan for .m case files (repeatable). "
-                         "Default: ./data and ./datafiles")
+                         "Default: ./data/exago/datafiles and ./data/exago/examples")
     ap.add_argument("--out", default="rag/corpus",
                     help="Corpus output directory (default: rag/corpus)")
     ap.add_argument("--apps", nargs="*", default=DEFAULT_APPS,
@@ -201,7 +201,7 @@ def main() -> int:
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    data_dirs = [Path(p) for p in (args.data_dir or ["data", "datafiles"])]
+    data_dirs = [Path(p) for p in (args.data_dir or ["data/exago/datafiles", "data/exago/examples"])]
 
     print(f"Harvesting into {out_dir}/ (provenance-tagged, safe to re-run)")
     written = []

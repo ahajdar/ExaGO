@@ -54,7 +54,7 @@ EXAMPLE_SPEC = {
     "timeout_s": 1200,
     "skip_existing": True,
     "cases": [
-        {"name": "case39", "path": "./data/case39.m", "app": "opflow"},
+        {"name": "case39", "path": "./data/exago/examples/case39.m", "app": "opflow"},
     ],
     "goals": [
         {"id": "cost10", "text": "Reduce total generation cost by 10%", "target_pct": 10},

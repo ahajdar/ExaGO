@@ -27,7 +27,7 @@
   "skip_existing": true,
   "env": {"AGENTIGRID_MAX_TOKENS": "16000"},
   "cases": [
-    {"name": "case39-opflow", "network": "case39", "path": "./data/case39.m", "app": "opflow", "goals": ["loadmax"]},
+    {"name": "case39-opflow", "network": "case39", "path": "./data/exago/examples/case39.m", "app": "opflow", "goals": ["loadmax"]},
     {"name": "ACTIVSg200-opflow", "network": "ACTIVSg200", "path": "../datafiles/case_ACTIVSg200.m", "app": "opflow", "goals": ["cost10", "loadmax"]},
     {"name": "ACTIVSg200x1.5-scopflow", "network": "ACTIVSg200", "path": "./rag/tools/specs/cases/case_ACTIVSg200_load1.5.m", "app": "scopflow", "extra_args": ["--ctgc", "../datafiles/case_ACTIVSg200.cont"], "goals": ["n1cost10"]},
     {"name": "ACTIVSg200x1.6-out134-133-pflow", "network": "ACTIVSg200", "path": "./rag/tools/specs/cases/case_ACTIVSg200_load1.6_agc_out134-133.m", "app": "pflow", "goals": ["relieve"], "guards": [{"branch_stays_out": [134, 133, 0]}]},

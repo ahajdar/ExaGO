@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def _load_runner():
@@ -186,8 +186,9 @@ def test_placeholder_model_refused(monkeypatch, tmp_path, capsys):
     assert "placeholder" in capsys.readouterr().out
 
 
-def test_store_env_selects_corpus_store(monkeypatch):
+def test_store_env_selects_corpus_store(monkeypatch, tmp_path):
     import agentigrid.rag as rag
+    monkeypatch.chdir(tmp_path)  # the relative store path must not land in the source tree
     monkeypatch.setenv("AGENTIGRID_RAG_MODE", "basic")
     monkeypatch.setenv("AGENTIGRID_RAG_STORE", "rag/store_docs")
     monkeypatch.setenv("AGENTIGRID_RAG_COLLECTION", "docs_kb")

@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 EVAL_SPEC = ROOT / "grader_ablation_spec.json"
 BOOT_SPEC = ROOT / "rag" / "tools" / "specs" / "corpus_bootstrap_spec.json"
 

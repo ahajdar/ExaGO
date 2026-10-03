@@ -75,8 +75,8 @@ overlap.
 
 ```bash
 GOAL="Reduce total generation cost by 10%"
-AGENTIGRID_RAG=0 agentigrid ./data/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null   # baseline
-AGENTIGRID_RAG=1 agentigrid ./data/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null   # RAG on
+AGENTIGRID_RAG=0 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null   # baseline
+AGENTIGRID_RAG=1 agentigrid ./data/exago/examples/case39.m "$GOAL" --backend ollama --model qwen2.5:7b --max-iter 4 < /dev/null   # RAG on
 ```
 
 **UI:** launch the Streamlit app (`./launcher/run.sh`). The "reference knowledge"

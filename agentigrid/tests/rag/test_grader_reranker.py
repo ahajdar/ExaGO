@@ -111,7 +111,7 @@ def test_journal_and_evaluator_carry_rag_config(tmp_path):
     out = tmp_path / "j.json"
     j.export_json(out)
     data = json.loads(out.read_text())
-    root = Path(__file__).resolve().parents[1]
+    root = Path(__file__).resolve().parents[2]
     spec = importlib.util.spec_from_file_location("ev", root / "rag" / "tools" / "experiment_eval.py")
     ev = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ev)

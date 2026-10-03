@@ -529,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", help="write full results + verdicts to this file")
     ap.add_argument("--write-stressed", type=float, metavar="F",
                     help="write the case scaled by F to --stressed-dir and exit")
-    ap.add_argument("--stressed-dir", default="data")
+    ap.add_argument("--stressed-dir", default="data/exago/datafiles")
     ap.add_argument("--vband", metavar="LO,HI",
                     help="judge bus-voltage violations against this band (pu) instead of the "
                          "case's Vmin/Vmax; with --write-stressed, also write it into the variant")
