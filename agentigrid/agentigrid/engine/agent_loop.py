@@ -730,8 +730,9 @@ def _benchmark_to_dict(bresult) -> dict:
 # Shown above retrieved references (corpus v2 amendment, 2026-10-07): worked
 # examples come from other networks; a model must not copy their bus numbers.
 RAG_REFERENCE_CAUTION = (
-    "These references come from other networks and use placeholders such as <bus>. "
-    "Take every bus, branch and generator number from THIS network's data, never from a reference."
+    "These references come from other networks and describe bus numbers instead of giving them. "
+    "Take every bus, branch and generator number from THIS network's data, never from a reference, "
+    "and never write angle brackets or placeholder words in a response."
 )
 
 

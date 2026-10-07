@@ -90,6 +90,21 @@ file is converted deterministically:
 (`concrete-bus`), and the agent prints a one-line caution above retrieved
 references (`RAG_REFERENCE_CAUTION` in `engine/agent_loop.py`).
 
+**Corpus v3 (same day).** The v2 pilot (24 runs, llama3 and qwen2.5) showed models
+copying the JSON placeholders literally: llama3 wrote `"bus": <offline generator
+bus 1>` (invalid JSON, every rejected iteration), qwen2.5 quoted them and invented
+bus numbers. v3 therefore gives **no JSON template for a command that names a bus**.
+The response is described in words ("one set_gen_status command per offline
+generator bus, each with "bus" set to a bus number listed on the "Offline
+generators (status=0)" line of THIS network's facts ... If that line says (none),
+this step does not apply"). Commands that name no bus keep their JSON, and no
+reference text contains an angle-bracket token. `corpus_guard.py` flags any
+placeholder left in a JSON line (`json-placeholder`). Convert from the **v1** file
+(a v2 file cannot be parsed and is refused):
+
+    git show <v1 commit>:agentigrid/rag/corpus/exago_exemplars_from_runs.txt > rag/corpus/exago_exemplars_from_runs.txt
+    python rag/tools/exemplar_neutral.py rag/corpus/exago_exemplars_from_runs.txt
+
 ## 2d. Audit and freeze
 
     python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus

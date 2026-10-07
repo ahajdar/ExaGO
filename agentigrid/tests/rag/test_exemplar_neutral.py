@@ -1,7 +1,10 @@
-"""Corpus v2: worked examples are network-neutral, and retrieved references carry a caution.
+"""Corpus v3: worked examples are network-neutral, and retrieved references carry a caution.
 
 Background (2026-10-07): in a corrective-RAG run on case118, 63 of 68 skipped
-commands targeted ACTIVSg500 buses that the model copied from retrieved examples.
+commands targeted ACTIVSg500 buses that the model copied from retrieved examples
+(-> corpus v2, placeholders). The v2 pilot then showed models copying the JSON
+placeholders literally (-> corpus v3: commands that name a bus are described in
+words, with no JSON template and no angle-bracket token).
 """
 
 from __future__ import annotations
@@ -17,6 +20,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 CORPUS = ROOT / "rag" / "corpus"
 CONCRETE_BUS = re.compile(r'"(?:bus|fbus|tbus)": *-?\d+')
+ANGLE = re.compile(r"<[^>\n]+>")
 
 
 def _load(name):
@@ -42,37 +46,59 @@ V1_BLOCK = (
 )
 
 
-def test_v1_run_exemplar_becomes_neutral_and_idempotent():
-    v2 = neutral.convert_v1_block(V1_BLOCK)
-    assert not CONCRETE_BUS.search(v2)
-    assert not any(str(b) in v2 for b in (435, 436, 125, 126, "57,598", "72,578"))
-    assert '"bus": <offline generator bus 1>' in v2 and "4 in this example" in v2
-    assert "objective -20.6% vs. the base case of the source network" in v2
-    assert "network: case_ACTIVSg500" in v2 and neutral.NEUTRAL_LABEL in v2
-    assert neutral.PLACEHOLDER_NOTE in v2
-    assert neutral.convert_v1_block(v2) == v2
+def test_v1_run_exemplar_becomes_words_and_idempotent():
+    v3 = neutral.convert_v1_block(V1_BLOCK)
+    assert not CONCRETE_BUS.search(v3) and not ANGLE.search(v3)
+    assert "Correct response (JSON)" not in v3            # no template to copy
+    assert not any(str(b) in v3 for b in (435, 436, 125, 126, "57,598", "72,578"))
+    assert "Step applied: set_gen_status on 4 offline generator buses (status=1)" in v3
+    assert ("one set_gen_status command per offline generator bus (4 in this example), each with "
+            '"bus" set to a bus number listed on the "Offline generators (status=0)" line') in v3
+    assert "If that line says (none), this step does not apply" in v3
+    assert "objective -20.6% vs. the base case of the source network" in v3
+    assert "network: case_ACTIVSg500" in v3 and neutral.NEUTRAL_LABEL in v3
+    assert neutral.PLACEHOLDER_NOTE in v3
+    assert neutral.convert_v1_block(v3) == v3
 
 
-def test_network_free_commands_are_unchanged():
+def test_v2_blocks_are_refused():
+    v2 = V1_BLOCK.replace("2026-09-28]", "2026-09-28 | " + neutral.V2_LABEL + "]")
+    with pytest.raises(ValueError):
+        neutral.convert_v1_block(v2)
+
+
+def test_network_free_commands_keep_their_json():
     cmds = [{"action": "scale_all_loads", "factor": 1.05},
             {"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05}]
-    assert neutral.neutral_commands_json(cmds) == json.dumps(cmds, separators=(", ", ": "))
     text = neutral.render_run_exemplar("[source: x]", "g", "fresh", cmds, "opflow", 1.0)
-    assert "Placeholders" not in text      # no placeholder, no note
+    assert '"commands": ' + json.dumps(cmds, separators=(", ", ": ")) in text
+    assert "Correct response (JSON)" in text and "How to write" not in text
+    assert neutral.PLACEHOLDER_NOTE not in text
 
 
-def test_generator_specific_values_become_placeholders_in_run_exemplars():
+def test_generator_specific_values_are_described():
     cmds = [{"action": "set_gen_dispatch", "bus": 145, "Pg": 250.55}]
     text = neutral.render_run_exemplar("[source: x]", None, "fresh", cmds, "pflow", None)
-    assert "145" not in text and "250.55" not in text
-    assert '"bus": <generator bus>' in text and "Pmin and Pmax" in text
+    assert "145" not in text and "250.55" not in text and not ANGLE.search(text)
+    assert '"bus" set to the bus number of a generator of THIS network' in text
+    assert "between that generator's Pmin and Pmax" in text
+
+
+def test_mixed_list_keeps_network_free_json_and_describes_the_rest():
+    cmds = [{"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05},
+            {"action": "set_branch_status", "fbus": 8, "tbus": 5, "status": 0}]
+    text = neutral.commands_in_words(cmds)
+    assert text.startswith('{"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05}; ')
+    assert '"fbus" set to the from-bus number of a branch' in text and '"tbus" set to the to-bus number' in text
 
 
 def test_text_substitution_keeps_decimals_and_other_numbers():
     cmds = [{"action": "set_shunt_susceptance", "bus": 44, "Bs": 25.0}]
     assert neutral.neutralize_text("Add 25 MVAr at bus 44.", cmds) == "Add 25 MVAr at <bus>."
+    assert neutral.placeholders_to_words("Add 25 MVAr at <bus>.") == "Add 25 MVAr at a bus."
     cmds = [{"action": "set_bus_vlimits", "bus": 12, "Vmin": 0.98, "Vmax": 1.02}]
     assert neutral.neutralize_text("Bus 12 band 0.98-1.02 pu", cmds) == "<bus> band 0.98-1.02 pu"
+    assert neutral.placeholders_to_words("between buses <from bus> and <to bus>") == "between two buses"
 
 
 @pytest.mark.skipif(not (ROOT.parent / "datafiles" / "case118.m").exists(), reason="case118 not present")
@@ -80,14 +106,19 @@ def test_schema_exemplars_are_certified_concretely_but_rendered_neutrally():
     chunks = schema.build(ROOT.parent / "datafiles" / "case118.m")
     assert sum("applied on held-out case118" in c for c in chunks) >= 12   # certification unchanged
     for c in chunks:
-        assert not CONCRETE_BUS.search(c), c
-        assert not re.search(r"\b[Bb]us(es)? \d", c.replace(neutral.PLACEHOLDER_NOTE, "")), c
+        assert not CONCRETE_BUS.search(c) and not ANGLE.search(c), c
+        assert not re.search(r"\b[Bb]us(es)? \d", c), c
+        if '"bus"' in c or '"fbus"' in c:
+            assert "How to write the response:" in c and "Correct response (JSON)" not in c, c
 
 
-def test_guard_flags_concrete_bus_in_worked_examples():
-    finds = guard.audit_text(V1_BLOCK, {"goals": set(), "networks": set()})
-    assert [f["kind"] for f in finds] == ["concrete-bus"]
-    assert guard.audit_text(neutral.convert_v1_block(V1_BLOCK), {"goals": set(), "networks": set()}) == []
+def test_guard_flags_concrete_bus_and_json_placeholders():
+    none = {"goals": set(), "networks": set()}
+    assert [f["kind"] for f in guard.audit_text(V1_BLOCK, none)] == ["concrete-bus"]
+    v2_line = ('[source: solver-certified AgentiGrid run | x]\n'
+               'Correct response (JSON): {"commands": [{"action": "set_gen_status", "bus": <bus>, "status": 1}]}')
+    assert [f["kind"] for f in guard.audit_text(v2_line, none)] == ["json-placeholder"]
+    assert guard.audit_text(neutral.convert_v1_block(V1_BLOCK), none) == []
 
 
 def test_shipped_corpus_is_neutral_and_matches_its_manifest():
@@ -113,7 +144,7 @@ def test_retrieved_references_carry_the_network_caution(tmp_path, monkeypatch):
         enabled = True
 
         def retrieve(self, q, k=None):
-            return "[ref 1 | score 0.80] [source: x | bus numbers: placeholders] example"
+            return "[ref 1 | score 0.80] [source: x | bus numbers: described in words] example"
 
         def describe(self):
             return {"mode": "basic", "enabled": True, "stats": {}}

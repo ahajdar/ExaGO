@@ -4,6 +4,28 @@ This document records significant changes made by Claude Code, grouped by the pr
 
 ---
 
+## RAG corpus v3: bus-specific steps described in words (2026-10-07)
+
+The corpus-v2 pilot (C0 vs C1, case118 and ACTIVSg200 OPFLOW cost10, llama3 and
+qwen2.5, 3 reps) showed placeholder copying: llama3 reproduced a retrieved
+example verbatim with `"bus": <offline generator bus 1>` (9/9 rejected
+iterations on both networks under C1); qwen2.5 wrote quoted placeholders
+("Bus <offline generator bus 1> does not exist") and invented generator buses.
+Neither model produced a skipped command under C0.
+
+- `rag/tools/exemplar_neutral.py`: commands that name a bus are rendered as
+  "How to write the response: ..." in words (which field, which number, from
+  which line of THIS network's data; an applicability sentence for offline
+  generators). Network-free commands keep their JSON. Step summaries and request
+  texts contain no angle-bracket tokens (`placeholders_to_words`). v2 blocks are
+  refused by the converter; convert from v1.
+- `rag_schema_exemplars.py`: same rendering; certification unchanged.
+- `corpus_guard.py`: new finding `json-placeholder`.
+- `agent_loop.py`: `RAG_REFERENCE_CAUTION` reworded (references describe bus
+  numbers; never write angle brackets or placeholder words).
+- Corpus re-frozen: sha256 2ac5623ba57b862bf0c1780e552cda0e78a7e225b1f8e0e37bb6299dd6eafdd6.
+- Tests: `tests/rag/test_exemplar_neutral.py` rewritten for v3 (10 tests).
+
 ## RAG corpus v2: network-neutral worked examples (2026-10-07)
 
 **Finding.** In a corrective-RAG run on case118 (local model), 63 of 68 skipped commands targeted buses that do not exist in case118 (435, 436, 264, ...): the model copied them from retrieved worked examples harvested on ACTIVSg500. Retrieval is goal-conditioned, so every network receives the same examples; the validator blocked every copied command, but the iterations were wasted. The of-record evaluation networks (case39, ACTIVSg200 variants) include neither ACTIVSg500 nor case118, so both exemplar files were affected.

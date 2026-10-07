@@ -30,8 +30,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from exemplar_neutral import (  # noqa: E402  (sibling tool module)
-    NEUTRAL_LABEL, PLACEHOLDER_NOTE, dump_with_placeholders, neutral_cmd, neutralize_text,
-    placeholder_map,
+    NEUTRAL_LABEL, PLACEHOLDER_NOTE, neutralize_text, placeholder_map, placeholders_to_words,
+    response_in_words,
 )
 
 OUT_NAME = "agentigrid_schema_exemplars.txt"
@@ -189,11 +189,13 @@ def certify(ex: dict, ref_net) -> str:
 
 
 def render(ex: dict, label: str) -> str:
-    """Render a certified exemplar network-neutrally (corpus v2).
+    """Render a certified exemplar network-neutrally (corpus v3).
 
-    Certification ran on the concrete case118 numbers; the rendered text replaces
-    every bus identifier with a role placeholder (<bus>, <generator bus>, <from bus>,
-    ...) so a model cannot copy case118 bus numbers into another network.
+    Certification ran on the concrete case118 numbers. An exemplar whose response
+    names a bus gets no JSON template: the response is described in words, saying
+    which field takes which number and where in THIS network's data to find it
+    (models copied v2's "bus": <bus> placeholders literally). Exemplars that name
+    no bus keep their exact JSON.
     """
     resp = ex["response"]
     cmds = list(resp.get("commands", []))
@@ -202,22 +204,16 @@ def render(ex: dict, label: str) -> str:
     else:
         cmds_for_map = cmds
     pmap = placeholder_map(cmds_for_map)
-    nresp = {}
-    for k, v in resp.items():
-        if k == "commands":
-            nresp[k] = [neutral_cmd(c, pmap, neutral_values=False) for c in v]
-        elif k in ("bus", "fbus", "tbus"):
-            nresp[k] = neutral_cmd(dict(resp, action=f"query:{resp.get('action')}"), pmap, False)[k]
-        elif k == "description":
-            nresp[k] = neutralize_text(v, cmds_for_map)
-        else:
-            nresp[k] = v
     tag = (f"[source: schema exemplar | generated from AgentiGrid's command set | {label} | "
            f"apps: {', '.join(ex.get('apps', []))} | {NEUTRAL_LABEL}]")
-    lines = [tag, f"Request: {neutralize_text(ex['request'], cmds_for_map)}",
-             f"Correct response (JSON): {dump_with_placeholders(nresp)}"]
+    words = lambda text: placeholders_to_words(neutralize_text(text, cmds_for_map))  # noqa: E731
+    lines = [tag, f"Request: {words(ex['request'])}"]
+    if pmap:
+        lines.append(f"How to write the response: {response_in_words(resp, cmds)}")
+    else:
+        lines.append(f"Correct response (JSON): {json.dumps(resp, separators=(', ', ': '))}")
     if ex.get("note"):
-        lines.append(f"Note: {neutralize_text(ex['note'], cmds_for_map)}")
+        lines.append(f"Note: {words(ex['note'])}")
     if pmap:
         lines.append(f"Note: {PLACEHOLDER_NOTE}")
     return "\n".join(lines)
