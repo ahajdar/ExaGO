@@ -35,6 +35,14 @@ Tests.
     otherwise "inconclusive". Always defined. Secondary: the relative reduction
     RR = 1 - mean(condition) / mean(C0), reported where C0's mean is not 0.
 
+Undefined values (amended 2026-10-08, before the of-record runs). experiment_eval
+scores valid_proposal_rate 0 when the model answered but never proposed (column
+valid_proposal_rate_zero_by_rule = 1); it stays undefined only when every iteration
+was lost to the harness. A pair with an undefined value on either side is dropped
+and COUNTED (n_dropped_undefined). A test with no pairs reports p = None ("no
+pairs") and is left out of the Holm family instead of entering it with p = 1. The
+Kruskal-Wallis test of H2 uses only models that have pairs.
+
 Dependency-free (standard library only), deterministic (fixed bootstrap seed).
 
     python rag/tools/experiment_stats.py --per-run experiments/ofrecord_v2/analysis/per_run.csv
@@ -232,8 +240,12 @@ def index(rows):
     return units, excluded
 
 
-def paired(units, treat, ctrl, metric, goals=None, model=None):
+def paired(units, treat, ctrl, metric, goals=None, model=None, stats=None):
+    """Paired differences treat - ctrl. If ``stats`` (a dict) is given, it receives
+    n_dropped_undefined (both conditions ran, a value is undefined) and
+    n_zero_by_rule (pairs where a side's valid_proposal_rate was set to 0 by rule)."""
     diffs, keys = [], []
+    dropped = zero_rule = 0
     for k, per in sorted(units.items()):
         if goals and k[1] not in goals:
             continue
@@ -244,24 +256,32 @@ def paired(units, treat, ctrl, metric, goals=None, model=None):
             if a is not None and b is not None:
                 diffs.append(a - b)
                 keys.append(k)
+                if metric == "valid_proposal_rate" and any(
+                        _num(per[c].get("valid_proposal_rate_zero_by_rule")) == 1.0 for c in (treat, ctrl)):
+                    zero_rule += 1
+            else:
+                dropped += 1
+    if stats is not None:
+        stats.update(n_dropped_undefined=dropped, n_zero_by_rule=zero_rule)
     return diffs, keys
 
 
 def contrast(units, spec, rng, model=None):
     hyp, treat, ctrl, metric, goals = spec
-    diffs, _ = paired(units, treat, ctrl, metric, goals, model)
-    w = wilcoxon(diffs)
+    info = {}
+    diffs, _ = paired(units, treat, ctrl, metric, goals, model, info)
+    w = wilcoxon(diffs) if diffs else {"n": 0, "p": None, "method": "no pairs"}
     lo, hi = boot_median_ci(diffs, rng)
     return {"hypothesis": hyp, "contrast": f"{treat} vs {ctrl}", "metric": metric,
             "goals": ",".join(goals) if goals else "all", "model": model or "pooled",
-            "n_pairs": len(diffs), "n_nonzero": w["n"],
+            "n_pairs": len(diffs), "n_nonzero": w["n"], **info,
             "median_diff": statistics.median(diffs) if diffs else None,
             "mean_diff": statistics.mean(diffs) if diffs else None,   # for 0/1 outcomes: difference in proportions
             "ci_low": lo, "ci_high": hi, "p": w["p"], "test": w["method"]}
 
 
 def h3(units, treat, model, rng):
-    vals = []
+    vals, dropped = [], 0
     for k, per in sorted(units.items()):
         if k[2] != model or treat not in per or "C0" not in per:
             continue
@@ -269,6 +289,8 @@ def h3(units, treat, model, rng):
              for m in ("validator_rejection_rate", "intent_violation_rate")]
         if None not in v:
             vals.append(v)          # [val_t, int_t, val_0, int_0]
+        else:
+            dropped += 1
 
     def ar(sample):
         av = statistics.mean(x[2] for x in sample) - statistics.mean(x[0] for x in sample)
@@ -282,7 +304,8 @@ def h3(units, treat, model, rng):
         ri = 1 - statistics.mean(x[1] for x in sample) / mi0 if mi0 else None
         return rv, ri
 
-    out = {"hypothesis": "H3", "contrast": f"{treat} vs C0", "model": model, "n_pairs": len(vals)}
+    out = {"hypothesis": "H3", "contrast": f"{treat} vs C0", "model": model, "n_pairs": len(vals),
+           "n_dropped_undefined": dropped}
     if not vals:
         return {**out, "verdict": "no data"}
     av, ai, d = ar(vals)
@@ -294,24 +317,33 @@ def h3(units, treat, model, rng):
             "rr_validator": rv, "rr_intent": ri, "verdict": verdict}
 
 
+def _holm_family(results):
+    """Holm across the tests that have a p value; tests without pairs stay out."""
+    tested = [r for r in results if r["p"] is not None]
+    for r, p in zip(tested, holm([x["p"] for x in tested])):
+        r["p_holm"] = p
+        r["significant"] = p < ALPHA
+    for r in results:
+        if r["p"] is None:
+            r["p_holm"], r["significant"] = None, False
+
+
 def analyse(rows) -> dict:
     rng = random.Random(SEED)
     units, excluded = index(rows)
     models = sorted({k[2] for k in units})
     primary = [contrast(units, s, rng) for s in PRIMARY]
-    for r, p in zip(primary, holm([x["p"] for x in primary])):
-        r["p_holm"] = p
-        r["significant"] = p < ALPHA
+    _holm_family(primary)
     per_model = [contrast(units, s, rng, m) for m in models for s in PRIMARY]
-    for r, p in zip(per_model, holm([x["p"] for x in per_model])):
-        r["p_holm"] = p
-        r["significant"] = p < ALPHA
+    _holm_family(per_model)
     h2 = []
     for t in RETRIEVAL:
-        groups = [paired(units, t, "C0", "valid_proposal_rate", None, m)[0] for m in models]
-        kw = kruskal(groups)
+        groups = {m: paired(units, t, "C0", "valid_proposal_rate", None, m)[0] for m in models}
+        used = [m for m in models if groups[m]]
+        kw = kruskal([groups[m] for m in used]) if len(used) >= 2 else {"h": None, "df": None, "p": None}
         h2.append({"hypothesis": "H2", "contrast": f"{t} vs C0 differs by model", "metric": "valid_proposal_rate",
-                   "models": models, "n_per_model": [len(g) for g in groups], **kw})
+                   "models": used, "models_without_pairs": [m for m in models if not groups[m]],
+                   "n_per_model": [len(groups[m]) for m in used], **kw})
     h3r = [h3(units, t, m, rng) for m in models for t in RETRIEVAL]
     return {"created": datetime.now().isoformat(), "alpha": ALPHA, "bootstrap": BOOT, "seed": SEED,
             "n_runs_ok": len(rows), "n_units": len(units), "models": models,
@@ -321,6 +353,17 @@ def analyse(rows) -> dict:
 
 def _f(v, nd=3):
     return "-" if v is None else (f"{v:.{nd}f}" if isinstance(v, float) else str(v))
+
+
+def _drop_note(r) -> str:
+    notes = []
+    if r.get("n_zero_by_rule"):
+        notes.append(f"{r['n_zero_by_rule']} pair(s) with a rate set to 0 by rule")
+    if r.get("n_dropped_undefined"):
+        notes.append(f"{r['n_dropped_undefined']} undefined dropped")
+    if r.get("p") is None:
+        notes.append("no pairs")
+    return f"  [{'; '.join(notes)}]" if notes else ""
 
 
 def report(res) -> str:
@@ -333,20 +376,23 @@ def report(res) -> str:
         extra = f" (diff. in proportion {_f(r['mean_diff'])})" if r["metric"] == "goal_attained" else ""
         L.append(f"  {r['contrast']:<10} {r['metric']:<22} n={r['n_pairs']:<4} median diff={_f(r['median_diff'])}{extra} "
                  f"[{_f(r['ci_low'])}, {_f(r['ci_high'])}]  p={_f(r['p'], 4)}  p_holm={_f(r['p_holm'], 4)}"
-                 f"  {'*' if r['significant'] else ''}")
+                 f"  {'*' if r['significant'] else ''}{_drop_note(r)}")
     L.append("\nPer model (Holm across these tests; capability floor, H2):")
     for r in res["per_model"]:
         L.append(f"  {r['model']:<20} {r['contrast']:<10} {r['metric']:<22} n={r['n_pairs']:<4} "
-                 f"median={_f(r['median_diff'])}  p_holm={_f(r['p_holm'], 4)}  {'*' if r['significant'] else ''}")
+                 f"median={_f(r['median_diff'])}  p_holm={_f(r['p_holm'], 4)}  {'*' if r['significant'] else ''}"
+                 f"{_drop_note(r)}")
     L.append("\nH2 interaction (Kruskal-Wallis on paired differences across models):")
     for r in res["h2_interaction"]:
-        L.append(f"  {r['contrast']:<28} H={_f(r['h'])} df={r['df']} p={_f(r['p'], 4)}")
+        L.append(f"  {r['contrast']:<28} H={_f(r['h'])} df={r['df']} p={_f(r['p'], 4)}"
+                 + (f"  (no pairs: {', '.join(r['models_without_pairs'])})" if r["models_without_pairs"] else ""))
     L.append("\nH3 (absolute reduction vs C0, rate points: validator rejections minus intent violations):")
     for r in res["h3"]:
         L.append(f"  {r['model']:<20} {r['contrast']:<10} n={r['n_pairs']:<4} AR_val={_f(r.get('ar_validator'))} "
                  f"AR_int={_f(r.get('ar_intent'))} delta={_f(r.get('delta'))} "
                  f"[{_f(r.get('ci_low'))}, {_f(r.get('ci_high'))}]  {r['verdict']}"
-                 f"   (relative: val={_f(r.get('rr_validator'))}, int={_f(r.get('rr_intent'))})")
+                 f"   (relative: val={_f(r.get('rr_validator'))}, int={_f(r.get('rr_intent'))})"
+                 + (f"  [{r['n_dropped_undefined']} undefined dropped]" if r.get("n_dropped_undefined") else ""))
     return "\n".join(L)
 
 
@@ -364,8 +410,8 @@ def main(argv=None) -> int:
     out = Path(a.out) if a.out else Path(a.per_run).with_name("stats.json")
     out.write_text(json.dumps(res, indent=2, default=str) + "\n")
     with open(out.with_suffix(".csv"), "w", newline="") as f:
-        cols = ["hypothesis", "contrast", "metric", "goals", "model", "n_pairs", "median_diff", "mean_diff",
-                "ci_low", "ci_high", "p", "p_holm", "significant", "test"]
+        cols = ["hypothesis", "contrast", "metric", "goals", "model", "n_pairs", "n_dropped_undefined",
+                "n_zero_by_rule", "median_diff", "mean_diff", "ci_low", "ci_high", "p", "p_holm", "significant", "test"]
         w = csv.DictWriter(f, fieldnames=cols, extrasaction="ignore")
         w.writeheader()
         w.writerows(res["primary"] + res["per_model"])

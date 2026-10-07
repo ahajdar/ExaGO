@@ -335,3 +335,18 @@ def test_valid_rate_counts_used_iterations_not_the_cap():
     m = ev.metrics_for({"entries": [base, mod], "discarded_actions": [{"iteration": 2, "kind": "rejected"}]},
                        {"success": "no_violations", "max_iter": 4})
     assert m["valid_proposal_rate"] == 0.5                 # a rejected proposal counts against validity
+
+
+def test_valid_rate_is_zero_when_the_model_only_completes():
+    """Amended 2026-10-08: answered but never proposed -> 0 (flagged), not undefined."""
+    done = {"iteration": 1, "convergence_status": "COMPLETE", "commands": [], "mode": "complete"}
+    m = ev.metrics_for({"entries": [_pf(0), done], "discarded_actions": []},
+                       {"success": "no_violations", "max_iter": 4})
+    assert m["valid_proposal_rate"] == 0.0 and m["valid_proposal_rate_zero_by_rule"] == 1
+
+
+def test_valid_rate_stays_undefined_when_every_iteration_was_lost_to_the_harness():
+    m = ev.metrics_for({"entries": [_pf(0)], "discarded_actions": [{"iteration": 1, "kind": "api_error"},
+                                                                  {"iteration": 2, "kind": "truncated"}]},
+                       {"success": "no_violations", "max_iter": 4})
+    assert m["valid_proposal_rate"] is None and m["valid_proposal_rate_zero_by_rule"] == 0

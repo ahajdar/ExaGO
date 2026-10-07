@@ -64,7 +64,7 @@ python rag/tools/experiment_eval.py --journals-glob 'workdir/journal_*.json'
 
 **Metrics (Tier-A, from the ExaGO oracle — no verifier needed):**
 - `cost_improvement_pct` = (base − best feasible) / base × 100.
-- `valid_proposal_rate` = iterations (past base) that applied a real modification ÷ attempts (`max_iter`). Directly quantifies the flat-iteration failure.
+- `valid_proposal_rate` = iterations (past base) that applied a real modification ÷ LLM iterations used (not counting the final `complete` or harness losses); 0 when the model answered but never proposed, undefined only when every iteration was lost to the harness. The old ÷ `max_iter` form is kept as `valid_proposal_rate_maxiter`. Directly quantifies the flat-iteration failure.
 - `any_feasible`, `n_solve_iters`, `solve_elapsed_s`, `wall_s`, and `llm_*` token counts (all LLM calls, incl. prompt-cache writes/reads).
 - `goal_attained`, `baseline_attained`, `iterations_to_goal` — judged on post-baseline single-solve entries by the goal's predicate:
   - `target_pct: N` → cost reduction vs. base ≥ N %;

@@ -433,7 +433,19 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
     n_complete = sum(1 for e in dict_entries
                      if e.get("convergence_status") == "COMPLETE" and e.get("iteration", 0) != 0)
     used = vm["llm_iterations"] - n_complete
-    valid_rate = round(n_mods / used, 3) if used > 0 else None
+    # Amended 2026-10-08 (before the of-record runs): a run whose model answered but
+    # only ever completed (no proposal at all) scores 0, not undefined. In analysed
+    # cells the baseline does not attain the goal, so stopping without proposing is a
+    # failure to act; leaving it undefined silently dropped those pairs (qwen2.5 under
+    # C0 in the pilots). Undefined remains only when no model answer reached the loop
+    # (every iteration lost to the harness: internal / api_error / truncated).
+    zero_by_rule = 0
+    if used > 0:
+        valid_rate = round(n_mods / used, 3)
+    elif vm["llm_iterations"] > 0:
+        valid_rate, zero_by_rule = 0.0, 1
+    else:
+        valid_rate = None
     valid_rate_maxiter = round(n_mods / attempts, 3) if attempts else None
 
     any_feasible = any(e.get("feasible") for e in solves)
@@ -450,6 +462,7 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         "attempts": attempts,
         "llm_iterations_used": used,
         "valid_proposal_rate": valid_rate,
+        "valid_proposal_rate_zero_by_rule": zero_by_rule,
         "valid_proposal_rate_maxiter": valid_rate_maxiter,
         "any_feasible": int(bool(any_feasible)),
         **attain,
@@ -556,7 +569,8 @@ def collect_journals(pattern: str):
     return rows
 
 
-NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "valid_proposal_rate_maxiter", "solve_elapsed_s",
+NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "valid_proposal_rate_zero_by_rule",
+           "valid_proposal_rate_maxiter", "solve_elapsed_s",
            "llm_prompt_tokens", "llm_completion_tokens",
            "llm_cache_creation_tokens", "llm_cache_read_tokens",
            "n_solve_iters", "wall_s",

@@ -103,3 +103,37 @@ def test_baseline_attained_cells_are_excluded(tmp_path):
     res = es.analyse(rows)
     assert ["c", "relieve", "weak"] in res["excluded_cells_baseline_attained"]
     assert res["n_units"] == 36
+
+
+def _floor_rows(c0_rate):
+    """Pilot pattern: 'weak' proposes nothing under C0, 0.75 under C1; 'mid' 0.3 -> 0.8."""
+    rows = []
+    for rep in range(1, 13):
+        for model, c0, c1 in (("weak", c0_rate, 0.75), ("mid", 0.3, 0.8)):
+            for cond, v in (("C0-norag", c0), ("C1-basic", c1)):
+                rows.append({"case": "c", "goal": "cost10", "model": model, "rep": str(rep), "condition": cond,
+                             "status": "ok", "valid_proposal_rate": "" if v is None else str(v),
+                             "valid_proposal_rate_zero_by_rule": "1" if (model == "weak" and cond.startswith("C0")
+                                                                         and v == 0.0) else "0",
+                             "goal_attained": "0", "cost_improvement_pct": "0", "baseline_attained": "0",
+                             "validator_rejection_rate": "0.2", "intent_violation_rate": "0.1"})
+    return rows
+
+
+def test_zero_by_rule_keeps_the_capability_floor_effect():
+    res = es.analyse(_floor_rows(0.0))
+    weak = next(r for r in res["per_model"] if r["model"] == "weak" and r["metric"] == "valid_proposal_rate")
+    assert weak["n_pairs"] == 12 and weak["n_zero_by_rule"] == 12 and weak["significant"]
+    assert res["h2_interaction"][0]["models"] == ["mid", "weak"]
+
+
+def test_undefined_pairs_are_counted_and_empty_tests_stay_out_of_holm():
+    res = es.analyse(_floor_rows(None))
+    weak = next(r for r in res["per_model"] if r["model"] == "weak" and r["metric"] == "valid_proposal_rate")
+    assert weak["n_pairs"] == 0 and weak["n_dropped_undefined"] == 12
+    assert weak["p"] is None and weak["p_holm"] is None and weak["test"] == "no pairs"
+    h2 = res["h2_interaction"][0]
+    assert h2["models"] == ["mid"] and h2["models_without_pairs"] == ["weak"] and h2["p"] is None
+    tested = [r for r in res["per_model"] if r["p"] is not None]
+    assert all(r["p_holm"] is not None for r in tested)
+    assert "no pairs" in es.report(res) and "12 undefined dropped" in es.report(res)

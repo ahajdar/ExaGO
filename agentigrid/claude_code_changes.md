@@ -4,6 +4,24 @@ This document records significant changes made by Claude Code, grouped by the pr
 
 ---
 
+## Analysis: valid_proposal_rate 0/0 counts as 0; empty tests leave Holm (2026-10-08)
+
+The pilots showed qwen2.5 completing without any proposal under C0, so its
+valid_proposal_rate was 0/0 = undefined and experiment_stats silently dropped every
+such pair: in a 20-rep simulation of the pilot pattern qwen's C1 vs C0 test had
+n = 0 yet was reported as p = 1.0 and counted in Holm, and the H2 Kruskal-Wallis
+returned p = None.
+
+- `experiment_eval.py`: a run whose model answered but never proposed scores
+  valid_proposal_rate = 0 (`valid_proposal_rate_zero_by_rule` = 1); undefined only
+  when every iteration was lost to the harness (internal / api_error / truncated).
+- `experiment_stats.py`: pairs with an undefined value are counted
+  (`n_dropped_undefined`, also for H3); pairs using the 0-by-rule value are counted
+  (`n_zero_by_rule`); a test with no pairs reports p = None ("no pairs") and is left
+  out of the Holm family; H2 uses only models with pairs and lists the others.
+- Runbook / README_experiments: valid_proposal_rate definition brought up to date.
+- Tests: 2 in tests/evaluation/test_goal_attainment.py, 2 in test_experiment_stats.py.
+
 ## Final corpus curation + hosted model Sonnet 5.5 (2026-10-08)
 
 - `rag/tools/curate_exemplars.py`: two fixed rules, decided before the of-record

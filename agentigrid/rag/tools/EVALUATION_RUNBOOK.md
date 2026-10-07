@@ -167,7 +167,7 @@ columns. `guard_rejections`, `intent_<guard>` and `discarded_*` are in
 
 | Column | Meaning |
 |---|---|
-| `valid_proposal_rate` | iterations after the baseline that applied a real modification ÷ `max_iter` |
+| `valid_proposal_rate` | iterations after the baseline that applied a real modification ÷ LLM iterations used (excluding the final `complete` and harness losses); 0 if the model answered but never proposed (`valid_proposal_rate_zero_by_rule` = 1), undefined only if every iteration was lost to the harness. `valid_proposal_rate_maxiter` (÷ `max_iter`) is secondary |
 | `cost_improvement_pct` | guarded: solves that violate a goal constraint do not count |
 | `goal_attained` / `iterations_to_goal` | the goal's predicate (`target_pct`, `n1_secure`, `no_violations`) on a single solve |
 | `baseline_attained` | 1 = iteration 0 already met the goal, so the cell measures nothing; fix the case before analysing it |
