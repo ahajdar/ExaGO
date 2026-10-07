@@ -223,7 +223,7 @@ def test_exemplar_carries_no_model_rationale():
     text = scrape.exemplar_text(e, {"model": "m", "goal_text": "g", "_base_objective": 200.0})
     assert "zero-cost" not in text and "Reasoning" not in text
     assert "set_gen_status on 3 offline generator buses (status=1)" in text
-    assert "one set_gen_status command per offline generator bus (3 in this example)" in text
+    assert "one command object per offline generator bus (3 in this example), each with \"action\": \"set_gen_status\"" in text
     assert "objective -50.0% vs. the base case of the source network" in text
     assert not any(str(b) in text for b in (435, 436, 264))      # network-neutral (corpus v2/v3)
 

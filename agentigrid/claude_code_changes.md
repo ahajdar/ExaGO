@@ -4,6 +4,16 @@ This document records significant changes made by Claude Code, grouped by the pr
 
 ---
 
+## RAG corpus v3.1: explicit "action" key and integer bus numbers (2026-10-08)
+
+The corpus-v3 pilot (36 runs incl. claude-sonnet-5-5) had no copied placeholders,
+but qwen2.5 under C1 built commands from the v3 wording without an "action" key
+and with quoted bus numbers ({'bus': '34', 'status': 1} -> "Command dict missing
+'action' key"). The prose listed the fields but not the action key. v3.1 names
+it explicitly ('one command object per ..., each with "action": "set_gen_status",
+"bus" set to ... (a plain integer, not in quotes), "status": 1').
+Corpus re-frozen: sha256 c91cf35b57d20fef524180ffb2423745d4e5ae7f218a87b041fd9006d1eb52c2.
+
 ## RAG corpus v3: bus-specific steps described in words (2026-10-07)
 
 The corpus-v2 pilot (C0 vs C1, case118 and ACTIVSg200 OPFLOW cost10, llama3 and

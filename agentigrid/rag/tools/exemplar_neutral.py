@@ -176,8 +176,8 @@ def _field_words(cmd: dict, k, v, neutral_values: bool, several: bool) -> str:
     if k in BUS_KEYS and isinstance(v, int) and not isinstance(v, bool):
         src = _SOURCE[_role(cmd, k)]
         if several and k != "tbus":
-            src += " (a different one for each command)"
-        return f'"{k}" set to {src}'
+            src += ", a different one for each command"
+        return f'"{k}" set to {src} (a plain integer, not in quotes)'
     if neutral_values and k in _GEN_VALUE_WORDS:
         return f'"{k}" set to {_GEN_VALUE_WORDS[k]}'
     return f'"{k}": {json.dumps(v)}'
@@ -189,7 +189,7 @@ def _a(word: str) -> str:
 
 def command_in_words(cmd: dict, neutral_values: bool = False, several: bool = False) -> str:
     fields = [_field_words(cmd, k, v, neutral_values, several) for k, v in cmd.items() if k != "action"]
-    return f'{_a(str(cmd.get("action")))} command with ' + ", ".join(fields)
+    return f'a command object with "action": {json.dumps(cmd.get("action"))}, ' + ", ".join(fields)
 
 
 def commands_in_words(cmds: list[dict], neutral_values: bool = False) -> str:
@@ -205,8 +205,8 @@ def commands_in_words(cmds: list[dict], neutral_values: bool = False) -> str:
         uniform = all(all(c.get(k) == cs[0].get(k) for k in others) for c in cs)
         if len(cs) > 1 and uniform:
             what = "branch" if isinstance(cs[0].get("fbus"), int) else _role(cs[0], "bus")
-            parts.append(f"one {action} command per {what} ({len(cs)} in this example), each with "
-                         + ", ".join(_field_words(cs[0], k, v, neutral_values, True)
+            parts.append(f"one command object per {what} ({len(cs)} in this example), each with "
+                         f'"action": {json.dumps(action)}, ' + ", ".join(_field_words(cs[0], k, v, neutral_values, True)
                                      for k, v in cs[0].items() if k != "action"))
         else:
             parts += [command_in_words(c, neutral_values, several=len(cs) > 1) for c in cs]

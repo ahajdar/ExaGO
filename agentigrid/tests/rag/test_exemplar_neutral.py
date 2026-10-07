@@ -52,8 +52,10 @@ def test_v1_run_exemplar_becomes_words_and_idempotent():
     assert "Correct response (JSON)" not in v3            # no template to copy
     assert not any(str(b) in v3 for b in (435, 436, 125, 126, "57,598", "72,578"))
     assert "Step applied: set_gen_status on 4 offline generator buses (status=1)" in v3
-    assert ("one set_gen_status command per offline generator bus (4 in this example), each with "
-            '"bus" set to a bus number listed on the "Offline generators (status=0)" line') in v3
+    assert ('one command object per offline generator bus (4 in this example), each with '
+            '"action": "set_gen_status", "bus" set to a bus number listed on the '
+            '"Offline generators (status=0)" line') in v3
+    assert "(a plain integer, not in quotes)" in v3
     assert "If that line says (none), this step does not apply" in v3
     assert "objective -20.6% vs. the base case of the source network" in v3
     assert "network: case_ACTIVSg500" in v3 and neutral.NEUTRAL_LABEL in v3
@@ -89,7 +91,8 @@ def test_mixed_list_keeps_network_free_json_and_describes_the_rest():
             {"action": "set_branch_status", "fbus": 8, "tbus": 5, "status": 0}]
     text = neutral.commands_in_words(cmds)
     assert text.startswith('{"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05}; ')
-    assert '"fbus" set to the from-bus number of a branch' in text and '"tbus" set to the to-bus number' in text
+    assert 'a command object with "action": "set_branch_status", "fbus" set to the from-bus number' in text
+    assert '"tbus" set to the to-bus number' in text
 
 
 def test_text_substitution_keeps_decimals_and_other_numbers():

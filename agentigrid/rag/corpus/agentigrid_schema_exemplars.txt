@@ -5,7 +5,7 @@ Note: set_all_bus_vlimits is a COMMAND, not an action. Wrong: {"action": "set_al
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow | bus numbers: described in words]
 Request: Tighten the voltage limits of a bus only to 0.98-1.02 pu.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_bus_vlimits command with "bus" set to a bus number of THIS network, "Vmin": 0.98, "Vmax": 1.02.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_bus_vlimits", "bus" set to a bus number of THIS network (a plain integer, not in quotes), "Vmin": 0.98, "Vmax": 1.02.
 Note: In OPFLOW/SCOPFLOW, bus voltages are decision variables: constrain them with set_bus_vlimits / set_all_bus_vlimits, not with set_gen_voltage.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
@@ -16,57 +16,57 @@ Note: factor is a multiplier: 1.08 = +8%, 0.9 = -10%. mode "fresh" applies the c
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: Set the load at a bus to 95 MW and 30 MVAr.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_load command with "bus" set to a bus number of THIS network, "Pd": 95.0, "Qd": 30.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_load", "bus" set to a bus number of THIS network (a plain integer, not in quotes), "Pd": 95.0, "Qd": 30.0.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: Add a new 40 MW load at a bus on top of its existing load.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: an add_load_at_bus command with "bus" set to a bus number of THIS network, "Pd": 40.0, "Qd": 0.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "add_load_at_bus", "bus" set to a bus number of THIS network (a plain integer, not in quotes), "Pd": 40.0, "Qd": 0.0.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: Take the generator at an in-service generator bus out of service.
-How to write the response: a "modify" action with "mode": "fresh", a short "description" and a "commands" list holding, in order: a set_gen_status command with "bus" set to the bus number of an in-service generator of THIS network, "status": 0.
+How to write the response: a "modify" action with "mode": "fresh", a short "description" and a "commands" list holding, in order: a command object with "action": "set_gen_status", "bus" set to the bus number of an in-service generator of THIS network (a plain integer, not in quotes), "status": 0.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: pflow | bus numbers: described in words]
 Request: Set the output of the generator at a generator bus to 150 MW.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_gen_dispatch command with "bus" set to the bus number of a generator of THIS network, "Pg": 150.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_gen_dispatch", "bus" set to the bus number of a generator of THIS network (a plain integer, not in quotes), "Pg": 150.0.
 Note: In OPFLOW/SCOPFLOW the optimizer re-dispatches generators; to force an output there, bound it instead (this command sets Pg as the starting value).
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: pflow | bus numbers: described in words]
 Request: Raise the voltage setpoint of the generator at a generator bus to 1.04 pu.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_gen_voltage command with "bus" set to the bus number of a generator of THIS network, "Vg": 1.04.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_gen_voltage", "bus" set to the bus number of a generator of THIS network (a plain integer, not in quotes), "Vg": 1.04.
 Note: Only meaningful in PFLOW. In OPFLOW/SCOPFLOW the solver overrides Vg.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: pflow | bus numbers: described in words]
 Request: Add 25 MVAr of capacitive shunt support at a bus.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_shunt_susceptance command with "bus" set to a bus number of THIS network, "Bs": 25.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_shunt_susceptance", "bus" set to a bus number of THIS network (a plain integer, not in quotes), "Bs": 25.0.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: pflow | bus numbers: described in words]
 Request: Change the tap ratio of the transformer between two buses to 1.0.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_tap_ratio command with "fbus" set to the from-bus number of a branch of THIS network, "tbus" set to the to-bus number of the same branch, "ratio": 1.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_tap_ratio", "fbus" set to the from-bus number of a branch of THIS network (a plain integer, not in quotes), "tbus" set to the to-bus number of the same branch (a plain integer, not in quotes), "ratio": 1.0.
 Note: Only transformer branches (ratio != 0 in the case) accept a tap change.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | schema-validated only (not applicable to reference case: Branch 30-17 is not a phase shifter (angle is 0)) | apps: pflow | bus numbers: described in words]
 Request: Set the phase shifter between two buses to 4 degrees.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_phase_shift_angle command with "fbus" set to the from-bus number of a branch of THIS network, "tbus" set to the to-bus number of the same branch, "angle": 4.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_phase_shift_angle", "fbus" set to the from-bus number of a branch of THIS network (a plain integer, not in quotes), "tbus" set to the to-bus number of the same branch (a plain integer, not in quotes), "angle": 4.0.
 Note: Only branches that are phase shifters (angle != 0 in the case) accept this command.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: Take the line between two buses out of service.
-How to write the response: a "modify" action with "mode": "fresh", a short "description" and a "commands" list holding, in order: a set_branch_status command with "fbus" set to the from-bus number of a branch of THIS network, "tbus" set to the to-bus number of the same branch, "status": 0.
+How to write the response: a "modify" action with "mode": "fresh", a short "description" and a "commands" list holding, in order: a command object with "action": "set_branch_status", "fbus" set to the from-bus number of a branch of THIS network (a plain integer, not in quotes), "tbus" set to the to-bus number of the same branch (a plain integer, not in quotes), "status": 0.
 Note: In SCOPFLOW this permanently changes the topology; contingencies come from the contingency file, not from set_branch_status.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: Raise the thermal rating of the line between two buses to 250 MVA.
-How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a set_branch_rate command with "fbus" set to the from-bus number of a branch of THIS network, "tbus" set to the to-bus number of the same branch, "rateA": 250.0.
+How to write the response: a "modify" action with "mode": "accumulative", a short "description" and a "commands" list holding, in order: a command object with "action": "set_branch_rate", "fbus" set to the from-bus number of a branch of THIS network (a plain integer, not in quotes), "tbus" set to the to-bus number of the same branch (a plain integer, not in quotes), "rateA": 250.0.
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | validated: parsed and applied on held-out case118 | apps: opflow, scopflow | bus numbers: described in words]
@@ -75,7 +75,7 @@ Correct response (JSON): {"action": "modify", "mode": "fresh", "description": "L
 
 [source: schema exemplar | generated from AgentiGrid's command set | structure-validated | apps: opflow, scopflow, pflow | bus numbers: described in words]
 Request: List the 3 buses nearest to a bus before deciding.
-How to write the response: an "analyze" action with "query_type": "nearest_neighbors", "bus" set to a bus number of THIS network, "k": 3, a short "reasoning".
+How to write the response: an "analyze" action with "query_type": "nearest_neighbors", "bus" set to a bus number of THIS network (a plain integer, not in quotes), "k": 3, a short "reasoning".
 Note: Bus numbers are described, not given: take them from THIS network's data. A response never contains angle brackets or placeholder words, only real numbers.
 
 [source: schema exemplar | generated from AgentiGrid's command set | structure-validated | apps: opflow, scopflow, pflow | bus numbers: described in words]
