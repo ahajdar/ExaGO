@@ -727,6 +727,14 @@ def _benchmark_to_dict(bresult) -> dict:
     return d
 
 
+# Shown above retrieved references (corpus v2 amendment, 2026-10-07): worked
+# examples come from other networks; a model must not copy their bus numbers.
+RAG_REFERENCE_CAUTION = (
+    "These references come from other networks and use placeholders such as <bus>. "
+    "Take every bus, branch and generator number from THIS network's data, never from a reference."
+)
+
+
 @dataclass
 class SearchSession:
     """Complete record of a search session."""
@@ -1462,6 +1470,7 @@ class AgentLoopController:
         if _retrieved:
             user_prompt = (
                 "=== Section B: Reference Material (retrieved) ===\n"
+                f"{RAG_REFERENCE_CAUTION}\n"
                 f"{_retrieved}\n\n{user_prompt}"
             )
 

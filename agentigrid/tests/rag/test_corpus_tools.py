@@ -187,7 +187,7 @@ def test_scraper_drops_intent_violations(tmp_path):
     assert scrape.main(["--runs-dir", str(tmp_path / "runs"), "--out", str(out),
                         "--exclude-spec", str(EVAL_SPEC)]) == 0
     text = (out / scrape.OUT_NAME).read_text()
-    assert text.count("[source:") == 1 and "set_gen_voltage(bus=10, Vg=1)" in text
+    assert text.count("[source:") == 1 and "set_gen_voltage(bus=<generator bus>, Vg=1)" in text
 
 
 def test_bootstrap_goals_declare_guards_and_model_is_outside_eval_set():
@@ -222,9 +222,10 @@ def test_exemplar_carries_no_model_rationale():
     e["llm_reasoning"] = "these generators have zero-cost curves"
     text = scrape.exemplar_text(e, {"model": "m", "goal_text": "g", "_base_objective": 200.0})
     assert "zero-cost" not in text and "Reasoning" not in text
-    assert "set_gen_status x3 on buses 435, 436, 264 (status=1)" in text
-    assert '"description": "set_gen_status x3' in text
-    assert "(-50.0% vs. base 200.00)" in text
+    assert "set_gen_status on 3 offline generator buses (status=1)" in text
+    assert '"description": "set_gen_status on 3 offline generator buses' in text
+    assert "objective -50.0% vs. the base case of the source network" in text
+    assert not any(str(b) in text for b in (435, 436, 264))      # network-neutral (corpus v2)
 
 
 def test_guards_spec_override_filters_older_runs(tmp_path):

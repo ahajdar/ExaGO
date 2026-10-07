@@ -75,6 +75,21 @@ The scraper refuses journals without a skip record (`--allow-legacy` to override
 teaches the `modify` action JSON rather than the ExaGO command line, and drops
 anything from the evaluated networks/goals (`grader_ablation_spec.json`).
 
+## 2c'. Network-neutral examples (corpus v2, 2026-10-07)
+
+Worked examples no longer name concrete bus numbers. Both generators render role
+placeholders (`<bus>`, `<offline generator bus 1>`, `<from bus>`, ...) through
+`rag/tools/exemplar_neutral.py`; certification still runs on the concrete numbers.
+Reason: in a corrective-RAG run on case118, 63 of 68 skipped commands targeted
+ACTIVSg500 buses the model had copied from retrieved examples. A v1 run-exemplar
+file is converted deterministically:
+
+    python rag/tools/exemplar_neutral.py rag/corpus/exago_exemplars_from_runs.txt
+
+`corpus_guard.py` now flags any worked example with a concrete `"bus": N`
+(`concrete-bus`), and the agent prints a one-line caution above retrieved
+references (`RAG_REFERENCE_CAUTION` in `engine/agent_loop.py`).
+
 ## 2d. Audit and freeze
 
     python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus

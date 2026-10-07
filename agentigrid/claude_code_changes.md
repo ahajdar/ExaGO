@@ -4,6 +4,26 @@ This document records significant changes made by Claude Code, grouped by the pr
 
 ---
 
+## RAG corpus v2: network-neutral worked examples (2026-10-07)
+
+**Finding.** In a corrective-RAG run on case118 (local model), 63 of 68 skipped commands targeted buses that do not exist in case118 (435, 436, 264, ...): the model copied them from retrieved worked examples harvested on ACTIVSg500. Retrieval is goal-conditioned, so every network receives the same examples; the validator blocked every copied command, but the iterations were wasted. The of-record evaluation networks (case39, ACTIVSg200 variants) include neither ACTIVSg500 nor case118, so both exemplar files were affected.
+
+**Change (amendment before the of-record runs).**
+
+| File | Change |
+|---|---|
+| `rag/tools/exemplar_neutral.py` | New: renders commands with role placeholders (`<bus>`, `<generator bus>`, `<offline generator bus N>`, `<from bus>`/`<to bus>`; run-specific `Pg` -> `<MW between that generator's Pmin and Pmax>`); long uniform lists collapsed; deterministic, idempotent v1->v2 converter |
+| `rag/tools/rag_schema_exemplars.py` | Certifies on concrete case118 numbers as before, renders neutrally (request, description, JSON) plus a placeholder note |
+| `rag/tools/rag_scrape_journal.py` | `exemplar_text()` renders neutrally; result line keeps the relative objective change only |
+| `rag/tools/corpus_guard.py` | New finding `concrete-bus` for worked examples naming a concrete bus |
+| `agentigrid/engine/agent_loop.py` | `RAG_REFERENCE_CAUTION` line under the Section B header |
+| `rag/corpus/` | Both exemplar files regenerated; re-frozen: corpus sha256 `965fcfac...` (v1 was `da4b77a5...`); 0 guard findings against `grader_ablation_spec.json` |
+| `tests/rag/test_exemplar_neutral.py` | New (8 tests); scraper tests updated to the neutral format |
+
+**Next (Amir).** Re-ingest (`rm -rf rag/store && python -m agentigrid.rag.ingest rag/corpus`), re-run the retrieval preview, label the v2 precision@3 items, pilot C0 vs fixed C1 counting "does not exist" skips, then record the amendment in the paper.
+
+---
+
 ## C.2/C.3 corrections — metric gating, summary aggregation, predicate audit, sweep dedup (2026-06-23)
 
 Four contained fixes from the prompt-13/15/17 runs. No capability behavior changed (capacity numbers, dispatch results, metric/predicate definitions, and the C.1 binding identifier are untouched) — only how results are gated, summarized, audited, and deduplicated.

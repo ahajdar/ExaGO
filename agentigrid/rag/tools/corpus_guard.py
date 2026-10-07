@@ -10,7 +10,10 @@ one or more experiment specs and flags:
   * eval-exemplar  — a worked example (proposal / correct response / correct
                      specification) that names an evaluated network;
   * personal-path  — an absolute home / Windows user path (machine-specific
-                     noise, and it must not reach a public repo).
+                     noise, and it must not reach a public repo);
+  * concrete-bus   — a worked example whose JSON names a concrete bus number
+                     ("bus": 435). Models copy such numbers into other networks,
+                     so examples must use placeholders (rag/tools/exemplar_neutral.py).
 
 Plain facts about an evaluated network (e.g. its bus count in the case metadata)
 are allowed: they are documentation, not a solution.
@@ -35,6 +38,7 @@ CORPUS_SUFFIXES = (".txt", ".md")
 MANIFEST_NAME = "corpus_manifest.json"
 _EXEMPLAR_MARKERS = ("proposal", "correct response", "correct specification",
                      "correct action", "commands actually run")
+_CONCRETE_BUS = re.compile(r'"(?:bus|fbus|tbus)": *-?\d+')
 _PERSONAL_PATH = re.compile(r"(/home/[A-Za-z0-9._-]+/|/Users/[A-Za-z0-9._-]+/|[A-Za-z]:\\Users\\|/mnt/c/Users/)")
 
 
@@ -85,6 +89,9 @@ def audit_text(text: str, holdout: dict) -> list[dict]:
             for n, pat in net_pats.items():
                 if pat.search(chunk):
                     findings.append({"chunk": i, "kind": "eval-exemplar", "detail": n})
+            cb = _CONCRETE_BUS.search(chunk)
+            if cb:
+                findings.append({"chunk": i, "kind": "concrete-bus", "detail": cb.group(0)})
         m = _PERSONAL_PATH.search(chunk)
         if m:
             findings.append({"chunk": i, "kind": "personal-path", "detail": m.group(0)})
