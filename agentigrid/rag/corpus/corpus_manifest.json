@@ -1,10 +1,10 @@
 {
-  "corpus_sha256": "c91cf35b57d20fef524180ffb2423745d4e5ae7f218a87b041fd9006d1eb52c2",
+  "corpus_sha256": "e3f4cc246a5f079fbc9c64ed74d8f1871503695a61c5567270f4374d132cd2b4",
   "files": {
     "agentigrid_schema_exemplars.txt": "b36aaad9d5c0293b835166cd3a0af9a861ce20ef6dbf7f945c7c26173126feb5",
     "exago_cases.txt": "d6acee84a70e58f85a9d58f911e8581b22d2a5659467c89e93c85322e91fdfeb",
     "exago_dcopflow_help.txt": "2aaeee330ebe9b8a693a3bce814f8bcaa0f8f45fb0c7e779188c672cce2ce481",
-    "exago_exemplars_from_runs.txt": "4cf798c02a4610b5a5d3ee2fb26bbf79b018fb46ed9b700d4826f5eeeac26263",
+    "exago_exemplars_from_runs.txt": "bddb3f6470bd86092a1265bc5847d960809be88794c4d183b7620bb6048784d2",
     "exago_opflow_help.txt": "3f87ccf31fd8d11a34037ba42e6efd86e95a26576db2fcded5a04598dc817758",
     "exago_pflow_help.txt": "a448c025037758950f699bfdf3473f87304230fb2904cc2135735a2f9886b8fc",
     "exago_scopflow_help.txt": "17f4ad66bc59bc5c97e434134e448d4010749ab4ca7ed5c67c4fb2a99031fedd",
@@ -17,5 +17,5 @@
   "held_out_specs": [
     "grader_ablation_spec.json"
   ],
-  "frozen_at": "2026-10-07T16:27:19.066995"
+  "frozen_at": "2026-10-07T16:50:30.390027"
 }
