@@ -4,6 +4,18 @@ This document records significant changes made by Claude Code, grouped by the pr
 
 ---
 
+## Final corpus curation + hosted model Sonnet 5.5 (2026-10-08)
+
+- `rag/tools/curate_exemplars.py`: two fixed rules, decided before the of-record
+  runs. R1 drops worked examples that change bus voltage limits while their goal
+  forbids changing or relaxing them (2 dropped: the ACTIVSg500 PFLOW relieve example
+  and the case118 PFLOW voltage example). R2 keeps one example per (source network,
+  app, step), the copy with the stricter goal wording (6 goal-wording duplicates
+  dropped). Run exemplars 23 -> 15. Tests: `tests/rag/test_curate_exemplars.py`.
+- `grader_ablation_spec.json`: hosted model `claude-sonnet-4-6` -> `claude-sonnet-5-5`
+  (ran cleanly in the v3 and v3.1 pilots; no truncation at the 16k cap).
+- Corpus re-frozen (sha256 in `rag/corpus/corpus_manifest.json`).
+
 ## RAG corpus v3.1: explicit "action" key and integer bus numbers (2026-10-08)
 
 The corpus-v3 pilot (36 runs incl. claude-sonnet-5-5) had no copied placeholders,

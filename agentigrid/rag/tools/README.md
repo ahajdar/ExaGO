@@ -105,6 +105,16 @@ placeholder left in a JSON line (`json-placeholder`). Convert from the **v1** fi
     git show <v1 commit>:agentigrid/rag/corpus/exago_exemplars_from_runs.txt > rag/corpus/exago_exemplars_from_runs.txt
     python rag/tools/exemplar_neutral.py rag/corpus/exago_exemplars_from_runs.txt
 
+## 2c''. Curate (final corpus, 2026-10-08)
+
+    python rag/tools/curate_exemplars.py rag/corpus/exago_exemplars_from_runs.txt
+
+Two fixed rules, applied before freezing: **R1** drops a worked example whose
+commands change bus voltage limits while its goal forbids changing or relaxing
+them; **R2** keeps one example per (source network, app, step), the copy with
+the stricter (longest) goal wording. Order after a new scrape: scrape -> convert
+(exemplar_neutral.py) -> curate -> audit and freeze.
+
 ## 2d. Audit and freeze
 
     python rag/tools/corpus_guard.py --spec grader_ablation_spec.json rag/corpus
