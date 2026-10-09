@@ -231,7 +231,21 @@ def _same_branch(c: dict, fbus, tbus, ckt) -> bool:
         a, b = int(c.get("fbus")), int(c.get("tbus"))
     except (TypeError, ValueError):
         return False
-    return {a, b} == {int(fbus), int(tbus)} and int(c.get("ckt") or 0) == int(ckt or 0)
+    try:
+        k = int(c.get("ckt") or 0)
+    except (TypeError, ValueError):
+        return False
+    return {a, b} == {int(fbus), int(tbus)} and k == int(ckt or 0)
+
+
+def _status_is_one(v) -> bool:
+    """True only for status 1 (number or numeric string). Anything else, e.g. the
+    string "out-of-service", is not a return to service; the validator rejects
+    statuses other than 0/1, so such a command is never applied."""
+    try:
+        return float(v) == 1.0
+    except (TypeError, ValueError):
+        return False
 
 
 def guard_violations(e, cmds, base_load_mw, guards) -> list[str]:
@@ -257,7 +271,7 @@ def guard_violations(e, cmds, base_load_mw, guards) -> list[str]:
                         break
         elif name == "branch_stays_out":
             f, t, k = (list(arg) + [0])[:3]
-            if any(str(c.get("action", "")).lower() == "set_branch_status" and int(c.get("status", 0)) == 1
+            if any(str(c.get("action", "")).lower() == "set_branch_status" and _status_is_one(c.get("status"))
                    and _same_branch(c, f, t, k) for c in cmds):
                 bad.append(name)
     return bad
