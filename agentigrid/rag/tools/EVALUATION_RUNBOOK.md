@@ -206,6 +206,7 @@ It writes `stats.json` and `stats.csv` next to `per_run.csv`. The script pairs r
 | G11 | You are tempted to add ACTIVSg200 or case39 material to the corpus | Don't. That is a hold-out leak (worked answers to the evaluated tasks). `corpus_guard.py` refuses to freeze such a corpus. |
 | G12 | `case39-opflow` fails with "file not found" | `data/` is git-ignored; copy `../datafiles/case39.m` into `data/` (section 1). |
 | G13 | Ollama stops mid-campaign (window closed, laptop restarted) | Local-model runs fail as `llm_error`. Retrieval runs used to fall back silently to no references and still be marked `ok`. Since patch 0037, the runner refuses to start when the embedding server doesn't answer, and it marks a retrieval run whose queries failed as `rag_error`, so a re-run redoes it. Keep the Ollama window open for the whole campaign. |
+| G14 | Local models behave as if they never saw the instructions; `llm_prompt_tokens / llm_calls` stays near 2k while hosted runs show 7–12k | Ollama's default context (4,096) silently cuts an over-long prompt to its first 4 and last ~2,050 tokens, dropping the system prompt. Set `AGENTIGRID_CONTEXT_TOKENS` (the spec does: 32768, sent as `num_ctx`) and use a model whose maximum context holds the prompt (`ollama show <model>`). Set `OLLAMA_NUM_PARALLEL=1` on the Ollama server during campaigns. The runner fails a run whose call may not fit (`llm_error`, `context_overflows` in `llm_usage`); check one run with `rag/tools/token_probe.py` (default_eval must equal full_eval). |
 
 ---
 

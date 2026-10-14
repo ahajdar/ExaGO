@@ -180,6 +180,9 @@ def llm_failure(journal_path) -> str | None:
     u = j.get("llm_usage")
     disc = [d for d in (j.get("discarded_actions") or []) if isinstance(d, dict)]
     n_api = sum(1 for d in disc if d.get("kind") == "api_error")
+    if isinstance(u, dict) and u.get("context_overflows"):
+        return (f"{u.get('context_overflows')} LLM call(s) may not have fit the model's context window "
+                f"(context_tokens={u.get('context_tokens')}); the model did not see the whole prompt")
     if isinstance(u, dict) and u.get("calls") and not (u.get("prompt_tokens") or u.get("completion_tokens")):
         return f"all {u.get('calls')} LLM call(s) failed (no tokens used); see run.log for the API error"
     if n_api and n_api == len(disc) and len(j.get("entries", [])) <= 1:

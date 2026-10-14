@@ -147,7 +147,8 @@ def test_usage_meter_counts_all_calls_and_is_transparent():
     assert meter.totals() == {
         "calls": 3, "prompt_tokens": 8110, "completion_tokens": 22,
         "cache_creation_tokens": 4000, "cache_read_tokens": 4000,
-        "api_errors": 0, "truncated": 0, "temperature_sent": None,
+        "api_errors": 0, "truncated": 0, "context_overflows": 0, "max_prompt_chars": 3,
+        "temperature_sent": None,
     }
     assert meter.name() == "stub"
     assert meter.custom() == "delegated"                 # backend-specific attrs delegate

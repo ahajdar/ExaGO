@@ -4861,6 +4861,7 @@ class AgentLoopController:
                 "backend": self._backend.name(),
                 "model": self._config.llm.model,
                 "max_tokens": self._config.llm.max_tokens,
+                "context_tokens": getattr(self._config.llm, "context_tokens", None),
                 "prompt_cache": bool(getattr(self._config.llm, "prompt_cache", False)),
             }
         

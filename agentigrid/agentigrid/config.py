@@ -43,6 +43,10 @@ DEFAULTS: dict[str, Any] = {
         "temperature": 0.3,
         "max_tokens": 4096,
         "prompt_cache": True,
+        # Ollama context window (num_ctx). None = Ollama's own default, which
+        # truncates long prompts silently (keeps the first tokens and the last
+        # half-window). AGENTIGRID_CONTEXT_TOKENS overrides it.
+        "context_tokens": None,
     },
     "search": {
         "max_iterations": 20,
@@ -136,6 +140,8 @@ class LLMConfig:
     # Anthropic prompt caching of the (per-session constant) system prompt.
     # Billing-only: does not change model outputs. Ignored by other backends.
     prompt_cache: bool = True
+    # Ollama only: context window sent as num_ctx (None = server default).
+    context_tokens: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -323,6 +329,15 @@ def load_config(
             merged["llm"] = {**merged["llm"], "max_tokens": int(_mt)}
         except ValueError:
             logger.warning("Ignoring non-integer AGENTIGRID_MAX_TOKENS=%r", _mt)
+
+    # AGENTIGRID_CONTEXT_TOKENS sets the Ollama context window (num_ctx); specs
+    # set it so local models receive the whole prompt (see ollama_backend).
+    _ct = os.environ.get("AGENTIGRID_CONTEXT_TOKENS", "").strip()
+    if _ct:
+        try:
+            merged["llm"] = {**merged["llm"], "context_tokens": int(_ct)}
+        except ValueError:
+            logger.warning("Ignoring non-integer AGENTIGRID_CONTEXT_TOKENS=%r", _ct)
 
     # Build frozen dataclass sections
     exago_path_fields = {

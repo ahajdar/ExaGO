@@ -33,6 +33,11 @@ class LLMResponse:
     # iterations out of the validator-rejection statistics.
     stop_reason: Optional[str] = None
     content_types: Optional[list] = None
+    # True when the prompt (plus the answer) may not have fit the model's
+    # context window, so the backend may have dropped part of it (Ollama keeps
+    # the first few tokens and the last half-window). Such a call did not see
+    # the full prompt; the experiment runner fails runs that contain one.
+    context_overflow: bool = False
 
 
 class LLMBackend(ABC):
@@ -87,6 +92,8 @@ class UsageMeter(LLMBackend):
         self.cache_read_tokens = 0
         self.api_errors = 0
         self.truncated = 0
+        self.context_overflows = 0
+        self.max_prompt_chars = 0
 
     def complete(self, system_prompt, user_prompt, temperature=None):
         resp = self._inner.complete(system_prompt, user_prompt, temperature)
@@ -95,6 +102,9 @@ class UsageMeter(LLMBackend):
             self.api_errors += 1
         if getattr(resp, "stop_reason", None) == "max_tokens":
             self.truncated += 1
+        if getattr(resp, "context_overflow", False):
+            self.context_overflows += 1
+        self.max_prompt_chars = max(self.max_prompt_chars, len(system_prompt or "") + len(user_prompt or ""))
         self.prompt_tokens += resp.prompt_tokens or 0
         self.completion_tokens += resp.completion_tokens or 0
         self.cache_creation_tokens += resp.cache_creation_tokens or 0
@@ -122,5 +132,7 @@ class UsageMeter(LLMBackend):
             "cache_read_tokens": self.cache_read_tokens,
             "api_errors": self.api_errors,
             "truncated": self.truncated,
+            "context_overflows": self.context_overflows,
+            "max_prompt_chars": self.max_prompt_chars,
             "temperature_sent": getattr(self._inner, "temperature_sent", None),
         }
