@@ -171,3 +171,66 @@ def test_agent_loop_logs_each_retrieval():
     loop._retriever = SimpleNamespace(enabled=False)
     loop._log_retrieval(3, "q", "")
     assert len(loop._journal.rag_log) == 1    # C0: nothing journaled
+
+
+# -- patch 1b: error-first query, severity order, chunk hashes ----------------
+from agentigrid.rag.query import build_error_query  # noqa: E402
+
+
+def _mixed_opflow():
+    return _opflow(violation_details=[
+        "Bus 3: Vm=1.033 pu > 1.03 (overvoltage)",
+        "Bus 4: Vm=1.031 pu > 1.03 (overvoltage)",
+        "Branch 123-124: Sf=446.20 > Slim=400.00 MVA",
+        "Bus 100: Vm=1.060 pu > 1.03 (overvoltage)",
+        "Contingency summary unavailable",
+        "Bus 7: Vm=0.930 pu < 0.95 (undervoltage)",
+    ])
+
+
+def test_error_query_has_errors_first_and_no_goal(monkeypatch):
+    monkeypatch.setenv("AGENTIGRID_RAG_QUERY", "error")
+    assert resolve_query_mode() == "error"
+    fb = "Command errors:\nSkipped SetGenVoltage(bus=100, Vg=1.04): No generator at bus 100"
+    q = build_query("error", GOAL, _opflow(), fb)
+    lines = q.splitlines()
+    assert lines[0] == "Command errors: Skipped SetGenVoltage(bus=100, Vg=1.04): No generator at bus 100"
+    assert lines[1].startswith("Violations: ")
+    assert lines[2].startswith("Current state: ")
+    assert GOAL not in q
+    assert build_query("error", GOAL, _opflow(), fb) == q          # deterministic
+
+
+def test_error_query_falls_back_to_goal():
+    clean = _opflow(num_violations=0, violation_details=[])
+    assert build_error_query(GOAL, clean, None) == GOAL
+    assert build_error_query(GOAL, None, None) == GOAL
+
+
+def test_violations_sorted_by_severity_in_both_state_modes():
+    for q in (build_state_query(GOAL, _mixed_opflow()), build_error_query(GOAL, _mixed_opflow())):
+        viol = next(l for l in q.splitlines() if l.startswith("Violations: "))[len("Violations: "):].split("; ")
+        # relative excess: branch 11.6%, bus 100 2.9%, bus 7 2.1%, bus 3 0.29%, bus 4 0.10%
+        assert viol == ["Branch 123-124: Sf=446.20 > Slim=400.00 MVA",
+                        "Bus 100: Vm=1.060 pu > 1.03 (overvoltage)",
+                        "Bus 7: Vm=0.930 pu < 0.95 (undervoltage)",
+                        "Bus 3: Vm=1.033 pu > 1.03 (overvoltage)",
+                        "Bus 4: Vm=1.031 pu > 1.03 (overvoltage)"]
+
+
+def test_unparseable_violations_keep_order_after_parsed_ones():
+    op = _opflow(violation_details=["odd line A", "Bus 1: Vm=1.06 pu > 1.05 (overvoltage)", "odd line B"])
+    q = build_error_query(GOAL, op)
+    assert "Violations: Bus 1: Vm=1.06 pu > 1.05 (overvoltage); odd line A; odd line B" in q
+
+
+def test_hits_carry_content_hash():
+    r = _basic([(EXEMPLAR, {"source": "run_exemplars.md"}, 0.62), (EXEMPLAR, {"source": "copy.md"}, 0.61),
+                ("other text", {"source": "x.md"}, 0.6)])
+    r.retrieve("q")
+    shas = [h["sha"] for h in r.last_trace["hits"]]
+    assert len(shas[0]) == 16 and shas[0] == shas[1] != shas[2]
+
+
+def test_runner_accepts_error_query():
+    assert er.unimplemented_reason({"env": {"AGENTIGRID_RAG_QUERY": "error"}}) is None

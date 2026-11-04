@@ -1,6 +1,6 @@
 """Retrieval query construction (generation stage only).
 
-Two query modes, selected per experiment condition by AGENTIGRID_RAG_QUERY:
+Three query modes, selected per experiment condition by AGENTIGRID_RAG_QUERY:
 
     goal  (default) -- the goal text, as in the paper-1 runs. Every iteration of a
                        run sends the same query, so a deterministic retriever
@@ -10,6 +10,19 @@ Two query modes, selected per experiment condition by AGENTIGRID_RAG_QUERY:
                        errors the validator reported for the previous proposal.
                        The query, and hence what retrieval and grading see, can
                        change from iteration to iteration.
+    error           -- what went wrong, without the goal text (which is already
+                       in the prompt): the previous iteration's command errors,
+                       then the worst violations, then the state line. Falls back
+                       to the goal text when there are neither errors nor
+                       violations. In a smoke test the 'state' query retrieved the
+                       same chunks in every iteration because the goal text
+                       dominated the embedding; this mode lets the state steer
+                       retrieval.
+
+Violations are ordered by severity (relative excess over the limit, parsed from
+the parser's "x > limit" / "x < limit" text; unparseable lines keep their order
+after the parsed ones), so the query carries the worst ones, not the first ones
+by bus number.
 
 The state query is built only from what the agent itself sees (the latest solve
 and the previous iteration's error feedback); it never reads the evaluator's
@@ -21,7 +34,7 @@ import os
 import re
 from typing import Any, Optional
 
-VALID_QUERY_MODES = ("goal", "state")
+VALID_QUERY_MODES = ("goal", "state", "error")
 
 MAX_QUERY_CHARS = 1500
 MAX_VIOLATIONS = 5
@@ -60,6 +73,32 @@ def _error_lines(feedback: Optional[str]) -> list[str]:
         if line not in out:
             out.append(line)
     return out
+
+
+_EXCESS = re.compile(r"=\s*([0-9]*\.?[0-9]+)\s*(?:pu|MVA)?\s*([<>])\s*(?:\w+=)?\s*([0-9]*\.?[0-9]+)")
+
+
+def _severity(detail: str) -> Optional[float]:
+    """Relative excess over the limit for a parser violation line, or None.
+
+    Matches e.g. "Bus 100: Vm=1.060 pu > 1.05 (overvoltage)" and
+    "Branch 123-124: Sf=446.20 > Slim=400.00 MVA".
+    """
+    m = _EXCESS.search(detail)
+    if not m:
+        return None
+    value, limit = float(m.group(1)), float(m.group(3))
+    if limit == 0:
+        return None
+    return abs(value - limit) / abs(limit)
+
+
+def _worst_violations(opflow: Any, n: int) -> list[str]:
+    viol = [_clean(v) for v in (getattr(opflow, "violation_details", None) or []) if _clean(v)]
+    indexed = list(enumerate(viol))
+    # parsed lines first, by descending severity; ties and unparsed keep order
+    indexed.sort(key=lambda t: (_severity(t[1]) is None, -(_severity(t[1]) or 0.0), t[0]))
+    return [v for _i, v in indexed[:n]]
 
 
 def _state_line(opflow: Any) -> str:
@@ -101,9 +140,9 @@ def build_state_query(
         st = _state_line(opflow)
         if st:
             lines.append(st)
-        viol = [_clean(v) for v in (getattr(opflow, "violation_details", None) or []) if _clean(v)]
+        viol = _worst_violations(opflow, max_violations)
         if viol:
-            lines.append("Violations: " + "; ".join(viol[:max_violations]))
+            lines.append("Violations: " + "; ".join(viol))
     errs = _error_lines(error_feedback)
     if errs:
         lines.append("Last command errors: " + "; ".join(errs[:max_errors]))
@@ -111,11 +150,43 @@ def build_state_query(
     return query[:max_chars]
 
 
+def build_error_query(
+    goal: str,
+    opflow: Any = None,
+    error_feedback: Optional[str] = None,
+    *,
+    max_violations: int = MAX_VIOLATIONS,
+    max_errors: int = MAX_ERRORS,
+    max_chars: int = MAX_QUERY_CHARS,
+) -> str:
+    """Errors first, then the worst violations, then the state line; no goal text.
+
+    Returns the goal text when there are neither command errors nor violations.
+    """
+    lines: list[str] = []
+    errs = _error_lines(error_feedback)
+    if errs:
+        lines.append("Command errors: " + "; ".join(errs[:max_errors]))
+    if opflow is not None:
+        viol = _worst_violations(opflow, max_violations)
+        if viol:
+            lines.append("Violations: " + "; ".join(viol))
+    if not lines:
+        return _clean(goal)[:max_chars]
+    if opflow is not None:
+        st = _state_line(opflow)
+        if st:
+            lines.append(st)
+    return "\n".join(lines)[:max_chars]
+
+
 def build_query(mode: str, goal: str, opflow: Any = None, error_feedback: Optional[str] = None) -> str:
     """Query for the given mode ('goal' returns the goal text unchanged)."""
     if mode == "state":
         return build_state_query(goal, opflow, error_feedback)
+    if mode == "error":
+        return build_error_query(goal, opflow, error_feedback)
     return goal
 
 
-__all__ = ["VALID_QUERY_MODES", "resolve_query_mode", "build_state_query", "build_query"]
+__all__ = ["VALID_QUERY_MODES", "resolve_query_mode", "build_state_query", "build_error_query", "build_query"]

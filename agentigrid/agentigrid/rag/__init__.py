@@ -18,8 +18,8 @@ AGENTIGRID_CRAG_TAU_LOWER / AGENTIGRID_CRAG_TAU_UPPER. Knowledge refinement
 (kept chunks injected intact).
 
 Query (AGENTIGRID_RAG_QUERY): goal (default; the goal text, every iteration) |
-state (goal plus the current solver state and the previous command errors);
-see query.py.
+state (goal plus the current solver state and the previous command errors) |
+error (command errors and worst violations, without the goal text); see query.py.
 
 Use `build_retriever(**kwargs)` to get the retriever for the active mode; every
 mode exposes the same surface (`.enabled` and `.retrieve(query) -> str`).
@@ -30,7 +30,7 @@ import os
 
 from .retriever import Retriever
 from .corrective import CorrectiveRetriever, VALID_REFINE_MODES
-from .query import VALID_QUERY_MODES, resolve_query_mode, build_query, build_state_query
+from .query import VALID_QUERY_MODES, resolve_query_mode, build_query, build_state_query, build_error_query
 
 VALID_MODES = ("off", "basic", "corrective")
 # Graders implemented behind the corrective-RAG seam. "jev" is usable only when
@@ -133,5 +133,5 @@ def build_retriever(**base_kwargs):
 __all__ = [
     "Retriever", "CorrectiveRetriever", "build_retriever",
     "resolve_rag_mode", "resolve_crag_grader", "resolve_crag_refine",
-    "VALID_QUERY_MODES", "VALID_REFINE_MODES", "resolve_query_mode", "build_query", "build_state_query",
+    "VALID_QUERY_MODES", "VALID_REFINE_MODES", "resolve_query_mode", "build_query", "build_state_query", "build_error_query",
 ]

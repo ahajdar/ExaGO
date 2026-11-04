@@ -12,6 +12,7 @@ matches are dropped instead of always returning `k` chunks.
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 from typing import Optional
 
@@ -19,12 +20,14 @@ logger = logging.getLogger("agentigrid.rag")
 
 
 def hits_summary(hits, scores=None) -> list[dict]:
-    """Compact, JSON-safe record of scored hits: source file, chunk id, score
-    (and the grader's score when it differs from the similarity)."""
+    """Compact, JSON-safe record of scored hits: source file, similarity, length,
+    a 16-hex content hash, and the grader's score when one is given."""
     out = []
     for i, (doc, meta, score) in enumerate(hits or []):
         meta = meta or {}
-        rec = {"source": meta.get("source"), "score": round(float(score), 4), "chars": len(doc or "")}
+        rec = {"source": meta.get("source"), "score": round(float(score), 4), "chars": len(doc or ""),
+               # content hash: shows directly whether two iterations got the same chunk
+               "sha": hashlib.sha256((doc or "").encode("utf-8")).hexdigest()[:16]}
         if scores is not None and i < len(scores):
             rec["grade"] = round(float(scores[i]), 4)
         out.append(rec)

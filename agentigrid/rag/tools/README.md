@@ -152,7 +152,7 @@ Both scripts print this; run it once when you're done:
 | Variable | Values | Effect |
 |---|---|---|
 | `AGENTIGRID_RAG_MODE` | `off`, `basic`, `corrective` | Retrieval on/off and the corrective (CRAG) evaluator. |
-| `AGENTIGRID_RAG_QUERY` | `goal` (default), `state` | `goal`: the goal text every iteration (the paper-1 runs). `state`: the goal plus the current solver state (status, violations, voltage range, max line loading) and the previous iteration's command errors, capped at 1,500 characters and deterministic for a given state. |
+| `AGENTIGRID_RAG_QUERY` | `goal` (default), `state`, `error` | `goal`: the goal text every iteration (the paper-1 runs). `state`: the goal plus the current solver state (status, violations, voltage range, max line loading) and the previous iteration's command errors. `error`: the previous command errors, then the worst violations, then the state line, without the goal text (the goal is already in the prompt; with `state` the goal text dominated the embedding and the same chunks came back every iteration); falls back to the goal text when there are no errors or violations. Both state modes list violations by severity (relative excess over the limit) and are capped at 1,500 characters and deterministic for a given state. |
 | `AGENTIGRID_CRAG_GRADER` | `cosine` (default), `reranker`, `jev` | Corrective grader. |
 | `AGENTIGRID_CRAG_REFINE` | `strips` (default), `whole` | `strips`: CRAG decompose-recompose into sentence strips. `whole`: kept chunks go in intact, and a chunk is kept only if its own grade reaches the lower threshold, so worked examples stay whole. |
 
@@ -160,6 +160,6 @@ Unknown values of `AGENTIGRID_RAG_QUERY` and `AGENTIGRID_CRAG_REFINE` raise, and
 the experiment runner refuses a condition that names one.
 
 Every retrieval run journals `rag_log`: one record per iteration with the query,
-its SHA-256, the scored hits (source, similarity, grade), the corrective verdict,
+its SHA-256, the scored hits (source, similarity, grade, 16-hex content hash), the corrective verdict,
 whether the query was rewritten, the action (used / empty / withheld / error) and
 a hash of the injected block. `rag_config.query_mode` records the query mode.
