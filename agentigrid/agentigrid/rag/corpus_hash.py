@@ -41,9 +41,21 @@ def corpus_hash(corpus_dir: Path) -> tuple[str, dict[str, str]]:
     return h.hexdigest(), per_file
 
 
-def corpus_status(corpus_dir: Path, store_dir: Path) -> dict:
+def combined_hash(digests: list[str]) -> str:
+    """Identity of a store built from several corpus folders, in the given order."""
+    h = hashlib.sha256()
+    for i, d in enumerate(digests):
+        h.update(f"{i}\0{d}\n".encode())
+    return h.hexdigest()
+
+
+def corpus_status(corpus_dir, store_dir: Path) -> dict:
     """Is *corpus_dir* frozen, unchanged since freezing, and is *store_dir* built
-    from exactly that corpus? Returns {"ok": bool, "reason": str|None, "corpus_sha256": ...}."""
+    from exactly that corpus? *corpus_dir* may be a list of folders ingested into
+    one store (each frozen on its own). Returns {"ok": bool, "reason": str|None,
+    "corpus_sha256": ...}."""
+    if isinstance(corpus_dir, (list, tuple)):
+        return _multi_corpus_status([Path(d) for d in corpus_dir], Path(store_dir))
     corpus_dir, store_dir = Path(corpus_dir), Path(store_dir)
     out = {"ok": False, "reason": None, "corpus_dir": str(corpus_dir), "store_dir": str(store_dir),
            "corpus_sha256": None}
@@ -69,6 +81,46 @@ def corpus_status(corpus_dir: Path, store_dir: Path) -> dict:
     if {k: built.get(k) for k in CHUNKING} != CHUNKING:
         out["reason"] = (f"store was built with different chunking ({built or 'v1, 800/100'}; "
                          f"current {CHUNKING}); re-run ingest")
+        return out
+    out["ok"] = True
+    return out
+
+
+def _frozen_digest(corpus_dir: Path) -> tuple[str | None, str | None]:
+    """(current digest, problem) for one folder: frozen and unchanged, or why not."""
+    mpath = corpus_dir / MANIFEST_NAME
+    if not mpath.exists():
+        return None, f"corpus not frozen ({mpath} missing; run corpus_guard.py --freeze)"
+    frozen = json.loads(mpath.read_text()).get("corpus_sha256")
+    digest, _ = corpus_hash(corpus_dir)
+    if digest != frozen:
+        return digest, f"corpus {corpus_dir} changed since it was frozen (re-run corpus_guard.py --freeze, then ingest)"
+    return digest, None
+
+
+def _multi_corpus_status(dirs: list[Path], store_dir: Path) -> dict:
+    out = {"ok": False, "reason": None, "corpus_dir": [str(d) for d in dirs], "store_dir": str(store_dir),
+           "corpus_sha256": None, "corpus_sha256s": []}
+    digests = []
+    for d in dirs:
+        dg, why = _frozen_digest(d)
+        if why:
+            out["reason"] = why
+            return out
+        digests.append(dg)
+    out["corpus_sha256s"] = digests
+    out["corpus_sha256"] = combined_hash(digests)
+    ipath = store_dir / INGEST_MANIFEST_NAME
+    if not ipath.exists():
+        out["reason"] = f"store not built by the current ingest ({ipath} missing; re-run ingest)"
+        return out
+    ing = json.loads(ipath.read_text())
+    if ing.get("corpus_sha256s") != digests or ing.get("corpus_sha256") != out["corpus_sha256"]:
+        out["reason"] = "store was built from a different set or version of corpora (re-run ingest with the same folders, in the same order)"
+        return out
+    built = ing.get("chunking") or {}
+    if {k: built.get(k) for k in CHUNKING} != CHUNKING:
+        out["reason"] = f"store was built with different chunking ({built}); re-run ingest"
         return out
     out["ok"] = True
     return out

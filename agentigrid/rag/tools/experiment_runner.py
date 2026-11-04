@@ -162,12 +162,14 @@ def retrieval_active(cond) -> bool:
 
 def corpus_check(cond, project_root: Path) -> dict | None:
     """Frozen-corpus status for a retrieval-active condition (None for C0).
-    The corpus dir comes from the condition's "corpus" key (default rag/corpus),
-    the store from AGENTIGRID_RAG_STORE (default rag/store)."""
+    The corpus dir comes from the condition's "corpus" key (default rag/corpus;
+    a list for a store built from several frozen corpora, in ingest order), the
+    store from AGENTIGRID_RAG_STORE (default rag/store)."""
     if not retrieval_active(cond):
         return None
     from agentigrid.rag.corpus_hash import corpus_status
-    corpus = project_root / cond.get("corpus", "rag/corpus")
+    spec = cond.get("corpus", "rag/corpus")
+    corpus = [project_root / c for c in spec] if isinstance(spec, (list, tuple)) else project_root / spec
     store = project_root / cond.get("env", {}).get("AGENTIGRID_RAG_STORE", "rag/store")
     return corpus_status(corpus, store)
 

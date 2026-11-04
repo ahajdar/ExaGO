@@ -182,3 +182,24 @@ labels. Journals written before the `violation_details` entry field (e.g.
 ofrecord_v3) lack the solver's violation lines, so replayed state/error queries
 omit that line; new runs record it. Thresholds default to the untuned
 0.30 / 0.50 (`--tau-cosine`, `--tau-reranker`).
+
+## Documentation corpus (ExaGO docs) and multi-corpus stores
+
+`build_docs_corpus.py` turns ExaGO's `docs/web/*.md` into `rag/corpus_docs/`:
+one block per section, prefixed `[source: ExaGO documentation | file: … |
+section: …]`, links reduced to their text, images and comments dropped, blocks
+capped below the 3,000-character chunk limit. `SOURCE` (ExaGO commit) and
+`LICENSE.ExaGO` sit next to it and are not indexed. It is realistic noise for
+corrective retrieval: most of it (installation, TCOPFLOW, SOPFLOW, testing) is
+irrelevant to the evaluated goals.
+
+    python rag/tools/build_docs_corpus.py --src ../docs/web --out rag/corpus_docs
+    python rag/tools/corpus_guard.py rag/corpus_docs --spec grader_ablation_spec.json --freeze
+    python -m agentigrid.rag.ingest rag/corpus rag/corpus_docs --store rag/store_core_docs
+
+`ingest` accepts several frozen corpus folders for one store; its manifest
+records each folder's hash and a combined hash (order matters). A spec condition
+names them as a list, `"corpus": ["rag/corpus", "rag/corpus_docs"]`, with
+`AGENTIGRID_RAG_STORE=rag/store_core_docs`, and the runner checks every folder
+and the combined store identity. The frozen core corpus and `rag/store` are
+untouched.
