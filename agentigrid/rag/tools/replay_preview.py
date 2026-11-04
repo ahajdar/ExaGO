@@ -115,6 +115,19 @@ def iteration_states(journal: dict) -> list[dict]:
 
 
 # -- retrieval -----------------------------------------------------------------
+def _refset(trace: dict, crag) -> str:
+    """The chunks a corrective retrieval actually injected (whole refinement),
+    plus a hedge marker for AMBIGUOUS. Compared across graders instead of the
+    injected text, which embeds each grader's own scores and so always differs."""
+    src = trace.get("hits", [])
+    if trace.get("rewrite") and trace.get("rewrite_verdict") not in ("", None, "incorrect"):
+        src = trace.get("rewrite_hits", [])
+    kept = [h.get("sha", "") for h in src
+            if h.get("grade") is not None and h["grade"] >= crag.tau_lower][: crag.max_refine_docs]
+    hedge = ["hedge"] if trace.get("verdict") == "ambiguous" or trace.get("rewrite_verdict") == "ambiguous" else []
+    return "|".join(kept + hedge)
+
+
 class Replayer:
     """Runs one query through basic retrieval and corrective retrieval per grader,
     caching by query text (identical queries give identical results)."""
@@ -161,6 +174,7 @@ class Replayer:
             res[f"{name}_rewrite_verdict"] = t.get("rewrite_verdict", "")
             res[f"{name}_top_grade"] = max((g for g in grades if g is not None), default="")
             res[f"{name}_injected"] = sha(out) if out else ""
+            res[f"{name}_refset"] = _refset(t, crag) if out else ""
             res[f"{name}_refs"] = t.get("injected_refs", 0)
         self.cache[query] = res
         return res
@@ -182,7 +196,8 @@ def summarize(rows: list[dict], graders: list[str]) -> dict:
             return {"n_states": 0}
         b = {"n_states": n,
              "unique_queries": len({r["query_sha"] for r in rs}),
-             "unique_basic_chunksets": len({r["basic_chunks"] for r in rs})}
+             "unique_basic_chunksets": len({r["basic_chunks"] for r in rs}),
+             "distinct_chunks_retrieved": len({c for r in rs for c in r["basic_chunks"].split("|") if c})}
         # steering: consecutive LLM iterations of the same run whose basic chunk set changed
         by_run = defaultdict(list)
         for r in rs:
@@ -204,8 +219,10 @@ def summarize(rows: list[dict], graders: list[str]) -> dict:
             g1, g2 = graders[0], graders[1]
             b[f"verdict_differs_{g1}_vs_{g2}"] = round(
                 sum(r.get(f"{g1}_verdict") != r.get(f"{g2}_verdict") for r in rs) / n, 4)
+            # same chunks + same hedge = same injected content (the text itself always
+            # differs because each block shows its own grader's scores)
             b[f"injected_differs_{g1}_vs_{g2}"] = round(
-                sum(r.get(f"{g1}_injected") != r.get(f"{g2}_injected") for r in rs) / n, 4)
+                sum(r.get(f"{g1}_refset") != r.get(f"{g2}_refset") for r in rs) / n, 4)
         return b
 
     out: dict = {"by_mode": {}, "by_goal_mode": {}}

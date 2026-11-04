@@ -115,6 +115,11 @@ def test_summary_gate_metrics():
     assert s["cosine"]["non_correct_share"] == 0.0
     assert s["reranker"]["non_correct_share"] == round(2 / 3, 4)
     assert s["verdict_differs_cosine_vs_reranker"] == round(2 / 3, 4)
+    # slack query: both graders inject chunk C only -> same content despite different scores
+    assert s["injected_differs_cosine_vs_reranker"] == round(2 / 3, 4)
+    assert rows[2]["cosine_injected"] != rows[2]["reranker_injected"]      # text differs (scores)...
+    assert rows[2]["cosine_refset"] == rows[2]["reranker_refset"]          # ...content does not
+    assert s["distinct_chunks_retrieved"] == 3
 
 
 def test_journal_entries_now_record_violation_details():
