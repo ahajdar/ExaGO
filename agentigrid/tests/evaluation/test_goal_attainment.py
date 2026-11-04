@@ -350,3 +350,18 @@ def test_valid_rate_stays_undefined_when_every_iteration_was_lost_to_the_harness
                                                                   {"iteration": 2, "kind": "truncated"}]},
                        {"success": "no_violations", "max_iter": 4})
     assert m["valid_proposal_rate"] is None and m["valid_proposal_rate_zero_by_rule"] == 0
+
+
+def test_vband_check_changed_mode_also_flags_narrowing(monkeypatch):
+    narrow = [{"action": "set_all_bus_vlimits", "Vmin": 0.97, "Vmax": 1.03}]
+    same = [{"action": "set_all_bus_vlimits", "Vmin": 0.95, "Vmax": 1.05}]
+    wide = [{"action": "set_all_bus_vlimits", "Vmin": 0.94, "Vmax": 1.10}]
+    g = ev.normalize_guards([{"vband_not_widened": [0.95, 1.05]}])
+    e = _pf(1)
+    assert ev.VBAND_MODE == "widened"
+    assert ev.guard_violations(e, narrow, 1000.0, g) == []            # pre-specified reading
+    assert ev.guard_violations(e, wide, 1000.0, g) == ["vband_not_widened"]
+    monkeypatch.setattr(ev, "VBAND_MODE", "changed")
+    assert ev.guard_violations(e, narrow, 1000.0, g) == ["vband_not_widened"]
+    assert ev.guard_violations(e, same, 1000.0, g) == []               # reasserting the case band is fine
+    assert ev.guard_violations(e, wide, 1000.0, g) == ["vband_not_widened"]

@@ -202,6 +202,15 @@ def base_load(entries):
     return None
 
 
+# How the vband_not_widened guard is read. "widened" (default) is the
+# pre-specified check: a band command outside the case band [lo, hi] violates
+# it. "changed" is an exploratory sensitivity reading, closer to goal texts that
+# say "without changing the bus voltage limits": any band command that differs
+# from [lo, hi] (narrowing included) violates it. Set by --vband-check.
+VBAND_MODES = ("widened", "changed")
+VBAND_MODE = "widened"
+
+
 def normalize_guards(guards) -> list[tuple[str, object]]:
     out = []
     for g in guards or []:
@@ -266,7 +275,9 @@ def guard_violations(e, cmds, base_load_mw, guards) -> list[str]:
             for c in cmds:
                 if str(c.get("action", "")).lower() in ("set_bus_vlimits", "set_all_bus_vlimits"):
                     vmin, vmax = _num(c.get("Vmin")), _num(c.get("Vmax"))
-                    if (vmin is not None and vmin < lo - 1e-6) or (vmax is not None and vmax > hi + 1e-6):
+                    widened = (vmin is not None and vmin < lo - 1e-6) or (vmax is not None and vmax > hi + 1e-6)
+                    narrowed = (vmin is not None and vmin > lo + 1e-6) or (vmax is not None and vmax < hi - 1e-6)
+                    if widened or (VBAND_MODE == "changed" and narrowed):
                         bad.append(name)
                         break
         elif name == "branch_stays_out":
@@ -642,7 +653,15 @@ def main() -> int:
     ap.add_argument("--runs", help="runner out_dir (containing <run_id>/manifest.json)")
     ap.add_argument("--journals-glob", help="alternatively, a glob of bare journal_*.json")
     ap.add_argument("--out", help="output dir (default: <runs>/analysis)")
+    ap.add_argument("--vband-check", choices=VBAND_MODES, default="widened",
+                    help="vband_not_widened reading: 'widened' (pre-specified, default) or 'changed' "
+                         "(exploratory sensitivity: narrowing the band also violates it). Use a separate --out.")
     args = ap.parse_args()
+    global VBAND_MODE
+    VBAND_MODE = args.vband_check
+    if VBAND_MODE != "widened" and not args.out:
+        ap.error("--vband-check changed is a sensitivity analysis; give a separate --out so the "
+                 "pre-specified analysis/ files are not overwritten")
 
     if args.runs:
         runs_dir = Path(args.runs)
