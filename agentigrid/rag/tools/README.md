@@ -203,3 +203,22 @@ names them as a list, `"corpus": ["rag/corpus", "rag/corpus_docs"]`, with
 `AGENTIGRID_RAG_STORE=rag/store_core_docs`, and the runner checks every folder
 and the combined store identity. The frozen core corpus and `rag/store` are
 untouched.
+
+## CRAG relevance labels (blind sheet for the power-systems engineer)
+
+`crag_labels.py make` samples 50 (situation, retrieved chunk) pairs (quotas 6 + 6) from
+a replay preview (stratified by goal x query mode x reranker-grade bin, with
+fixed quotas for ExaGO-documentation chunks and voltage-goal band-change
+examples), writes a blind workbook (goal, situation, reference; no model,
+condition, mode, score or grader) and a private `_key.csv`. Label definition B:
+1 if the reference helps a valid next move toward the goal without violating
+its stated constraints. `crag_labels.py score` joins the filled workbook with
+the key and reports each grader's AUC (overall and per goal), thresholds fitted
+by the precision/NPV rule (printed as `--tau-*` arguments for the replay), the
+reranker's ECE raw vs Platt-scaled (leave one goal out), and the label shares
+of the documentation and band-change pairs. Stopping rule, fixed before labelling: a
+second batch of 50 only if batch 1 has fewer than 10 labels of 1 or of 0, or a
+grader gets no threshold; `score` prints whether it is due.
+
+    python rag/tools/crag_labels.py make --replay experiments/replay_preview_v2 --out labels/crag_labels_v1.xlsx
+    python rag/tools/crag_labels.py score --sheet labels/crag_labels_v1_filled.xlsx --key labels/crag_labels_v1_key.csv
