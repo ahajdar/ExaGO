@@ -113,6 +113,17 @@ def unimplemented_reason(cond):
     mode = env.get("AGENTIGRID_RAG_MODE")
     if mode is not None and str(mode).strip().lower() not in VALID_MODES:
         return f"AGENTIGRID_RAG_MODE={mode!r} not implemented (valid: {', '.join(VALID_MODES)})"
+    for var, valid_name in (("AGENTIGRID_RAG_QUERY", "VALID_QUERY_MODES"), ("AGENTIGRID_CRAG_REFINE", "VALID_REFINE_MODES")):
+        val = env.get(var)
+        if val is None:
+            continue
+        try:
+            import agentigrid.rag as _rag
+            valid = getattr(_rag, valid_name)
+        except Exception as exc:
+            return f"cannot verify {var} ({exc})"
+        if str(val).strip().lower() not in valid:
+            return f"{var}={val!r} not implemented (valid: {', '.join(valid)})"
     grader = env.get("AGENTIGRID_CRAG_GRADER")
     if grader is not None:
         g = str(grader).strip().lower()

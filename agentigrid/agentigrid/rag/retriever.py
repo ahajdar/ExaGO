@@ -18,6 +18,19 @@ from typing import Optional
 logger = logging.getLogger("agentigrid.rag")
 
 
+def hits_summary(hits, scores=None) -> list[dict]:
+    """Compact, JSON-safe record of scored hits: source file, chunk id, score
+    (and the grader's score when it differs from the similarity)."""
+    out = []
+    for i, (doc, meta, score) in enumerate(hits or []):
+        meta = meta or {}
+        rec = {"source": meta.get("source"), "score": round(float(score), 4), "chars": len(doc or "")}
+        if scores is not None and i < len(scores):
+            rec["grade"] = round(float(scores[i]), 4)
+        out.append(rec)
+    return out
+
+
 class Retriever:
     def __init__(
         self,
@@ -34,6 +47,9 @@ class Retriever:
         # query (e.g. embedding server down) silently degrades to the no-RAG
         # baseline, so errors must be counted or a retrieval run is mislabelled.
         self.stats = {"calls": 0, "errors": 0, "empty": 0}
+        # What the last retrieve() call did (journaled per iteration by the agent
+        # loop as rag_log): scored hits by source, how many were kept, outcome.
+        self.last_trace: dict = {}
         self.k = k
         self.min_score = min_score
         self.store_path = path
@@ -53,16 +69,21 @@ class Retriever:
         Only chunks with cosine similarity >= min_score are kept.
         """
         if not self.enabled or self._store is None or not query:
+            self.last_trace = {"mode": "basic", "action": "disabled"}
             return ""
         self.stats["calls"] += 1
         try:
             hits = self._store.query(query, k or self.k)
         except Exception as exc:
             self.stats["errors"] += 1
+            self.last_trace = {"mode": "basic", "action": "error", "error": type(exc).__name__}
             logger.warning("Retrieval failed (%s: %s); this iteration runs without references",
                            type(exc).__name__, exc)
             return ""  # retrieval must never break a run
+        all_hits = hits
         hits = [(doc, meta, score) for (doc, meta, score) in hits if score >= self.min_score]
+        self.last_trace = {"mode": "basic", "hits": hits_summary(all_hits), "kept": len(hits),
+                           "action": "used" if hits else "empty"}
         if not hits:
             self.stats["empty"] += 1
             return ""

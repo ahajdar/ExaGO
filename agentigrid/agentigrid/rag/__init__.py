@@ -13,7 +13,13 @@ For backward compatibility the legacy switch still works:
 
 Corrective-mode grader (AGENTIGRID_CRAG_GRADER): cosine (default) | reranker
 (local cross-encoder, needs sentence-transformers) | jev (stub). Thresholds:
-AGENTIGRID_CRAG_TAU_LOWER / AGENTIGRID_CRAG_TAU_UPPER.
+AGENTIGRID_CRAG_TAU_LOWER / AGENTIGRID_CRAG_TAU_UPPER. Knowledge refinement
+(AGENTIGRID_CRAG_REFINE): strips (default, CRAG decompose-recompose) | whole
+(kept chunks injected intact).
+
+Query (AGENTIGRID_RAG_QUERY): goal (default; the goal text, every iteration) |
+state (goal plus the current solver state and the previous command errors);
+see query.py.
 
 Use `build_retriever(**kwargs)` to get the retriever for the active mode; every
 mode exposes the same surface (`.enabled` and `.retrieve(query) -> str`).
@@ -23,7 +29,8 @@ from __future__ import annotations
 import os
 
 from .retriever import Retriever
-from .corrective import CorrectiveRetriever
+from .corrective import CorrectiveRetriever, VALID_REFINE_MODES
+from .query import VALID_QUERY_MODES, resolve_query_mode, build_query, build_state_query
 
 VALID_MODES = ("off", "basic", "corrective")
 # Graders implemented behind the corrective-RAG seam. "jev" is usable only when
@@ -70,6 +77,18 @@ def _make_crag_grader():
     return None  # 'cosine' (and any unknown value already normalized)
 
 
+def resolve_crag_refine() -> str:
+    """Knowledge-refinement mode from AGENTIGRID_CRAG_REFINE ('strips' when unset).
+    Unknown values raise: a silently different refinement would mislabel a run."""
+    raw = os.environ.get("AGENTIGRID_CRAG_REFINE", "").strip().lower()
+    if not raw:
+        return "strips"
+    if raw not in VALID_REFINE_MODES:
+        raise ValueError(f"AGENTIGRID_CRAG_REFINE={raw!r} is not a refinement mode "
+                         f"(valid: {', '.join(VALID_REFINE_MODES)})")
+    return raw
+
+
 def _tau_overrides() -> dict:
     """Corrective thresholds from AGENTIGRID_CRAG_TAU_LOWER / _UPPER, if set.
 
@@ -106,11 +125,13 @@ def build_retriever(**base_kwargs):
         return Retriever(enabled=False)
     base = Retriever(enabled=True, **base_kwargs)
     if mode == "corrective":
-        return CorrectiveRetriever(base, grader=_make_crag_grader(), **_tau_overrides())
+        return CorrectiveRetriever(base, grader=_make_crag_grader(), refine=resolve_crag_refine(),
+                                   **_tau_overrides())
     return base  # 'basic' (and any unknown value already normalized to basic)
 
 
 __all__ = [
     "Retriever", "CorrectiveRetriever", "build_retriever",
-    "resolve_rag_mode", "resolve_crag_grader",
+    "resolve_rag_mode", "resolve_crag_grader", "resolve_crag_refine",
+    "VALID_QUERY_MODES", "VALID_REFINE_MODES", "resolve_query_mode", "build_query", "build_state_query",
 ]

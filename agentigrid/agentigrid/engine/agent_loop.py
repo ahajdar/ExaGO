@@ -11,7 +11,7 @@ import re
 import statistics
 import threading
 import time
-from agentigrid.rag import build_retriever
+from agentigrid.rag import build_retriever, build_query, resolve_query_mode
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -787,8 +787,12 @@ class AgentLoopController:
         self._retriever = build_retriever(
             host=os.environ.get("OLLAMA_HOST") or getattr(config.llm, "ollama_host", None) or "http://localhost:11434",
         )
+        # Query mode is resolved once per run; an unknown value raises here rather
+        # than silently running another condition.
+        self._rag_query_mode = resolve_query_mode()
         self._executor = SimulationExecutor(config.exago, config.output)
         self._journal = SearchJournal()
+        self._journal.rag_log = []
         self._quiet = quiet
         self._on_iteration = on_iteration
         self._on_phase = on_phase
@@ -1464,10 +1468,16 @@ class AgentLoopController:
             steering_directives=self._active_steering_directives or None,
             current_iteration=iteration,
         )
+        _feedback_for_query = self._error_feedback
         self._error_feedback = None  # consumed
 
-        # RAG: generation-stage grounding only (verifier untouched)
-        _retrieved = self._retriever.retrieve(goal)
+        # RAG: generation-stage grounding only (verifier untouched). The query is
+        # the goal text (default) or, with AGENTIGRID_RAG_QUERY=state, the goal plus
+        # the current solver state and the previous iteration's command errors.
+        _query = build_query(self._rag_query_mode, goal,
+                             getattr(self, "_latest_opflow", None), _feedback_for_query)
+        _retrieved = self._retriever.retrieve(_query)
+        self._log_retrieval(iteration, _query, _retrieved)
         if _retrieved:
             user_prompt = (
                 "=== Section B: Reference Material (retrieved) ===\n"
@@ -4839,6 +4849,27 @@ class AgentLoopController:
     # Finalization
     # ------------------------------------------------------------------
 
+    def _log_retrieval(self, iteration: int, query: str, injected: str) -> None:
+        """Journal what retrieval did in this iteration (rag_log): the query, the
+        scored hits, the grader's verdict and action, and a hash of the injected
+        block, so runs can be audited and replayed per iteration."""
+        if not getattr(self._retriever, "enabled", False):
+            return
+        try:
+            import hashlib
+            rec = {
+                "iteration": iteration,
+                "query_mode": self._rag_query_mode,
+                "query": query,
+                "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
+                "injected_chars": len(injected or ""),
+                "injected_sha256": hashlib.sha256(injected.encode("utf-8")).hexdigest() if injected else None,
+                **dict(getattr(self._retriever, "last_trace", {}) or {}),
+            }
+            self._journal.rag_log.append(rec)
+        except Exception as exc:  # telemetry must never break a run
+            logger.warning("Could not journal retrieval for iteration %s: %s", iteration, exc)
+
     def _finalize(self, session: SearchSession, elapsed_seconds: float) -> None:
         """Print summary and save journal."""
         _rag_enabled = self._retriever.enabled
@@ -4850,6 +4881,7 @@ class AgentLoopController:
                 **(_desc() if callable(_desc) else {}),
                 "mode_env": resolve_rag_mode(),
                 "grader_env": resolve_crag_grader(),
+                "query_mode": self._rag_query_mode,
             }
         except Exception:
             self._journal.rag_config = None

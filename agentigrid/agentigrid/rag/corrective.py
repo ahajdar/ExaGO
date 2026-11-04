@@ -33,11 +33,21 @@ import math
 import re
 from typing import Callable, Optional
 
-from .retriever import Retriever
+from .retriever import Retriever, hits_summary
 
 Hit = tuple[str, dict, float]
 
 CORRECT, AMBIGUOUS, INCORRECT = "correct", "ambiguous", "incorrect"
+
+# Knowledge-refinement modes (AGENTIGRID_CRAG_REFINE):
+#   strips -- CRAG decompose-recompose: kept chunks are split into sentence/line
+#             strips, re-scored and recomposed (the original behaviour). It cuts
+#             worked examples apart (goal, steps and JSON end up in separate,
+#             re-sorted lines).
+#   whole  -- document-level refinement: a kept chunk is injected whole, and a
+#             chunk is kept only if its own grade reaches tau_lower. Structured
+#             examples stay intact.
+VALID_REFINE_MODES = ("strips", "whole")
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -85,7 +95,11 @@ class CorrectiveRetriever:
         max_refine_docs: int = 3,
         max_strips_per_doc: int = 4,
         grader: Optional[Callable[[str, list[Hit]], list[float]]] = None,
+        refine: str = "strips",
     ):
+        if refine not in VALID_REFINE_MODES:
+            raise ValueError(f"refine={refine!r} is not a refinement mode (valid: {', '.join(VALID_REFINE_MODES)})")
+        self.refine = refine
         self._base = base
         self.enabled = base.enabled
         self.k = base.k
@@ -102,6 +116,8 @@ class CorrectiveRetriever:
         # analysis see what corrective retrieval actually did in each run.
         self.stats = {"calls": 0, "correct": 0, "ambiguous": 0, "incorrect": 0,
                       "rewrites": 0, "withheld": 0, "grader_fallbacks": 0}
+        # What the last retrieve() call did (journaled per iteration as rag_log).
+        self.last_trace: dict = {}
 
     def describe(self) -> dict:
         """Effective configuration for this run (shown in the UI / logged)."""
@@ -115,6 +131,7 @@ class CorrectiveRetriever:
             "tau_lower": self.tau_lower,
             "tau_upper": self.tau_upper,
             "strip_min_score": self.strip_min_score,
+            "refine": self.refine,
             "grader": self._grader_name(),
             "grader_detail": self._grader_detail(),
             "stats": {**dict(self.stats),
@@ -166,7 +183,11 @@ class CorrectiveRetriever:
         return verdict
 
     # -- refinement (decompose-recompose) ------------------------------
-    def _refine(self, query: str, hits: list[Hit]) -> list[tuple[str, float]]:
+    def _refine(self, query: str, hits: list[Hit], scores: Optional[list[float]] = None) -> list[tuple[str, float]]:
+        if self.refine == "whole":
+            grades = scores if scores is not None and len(scores) == len(hits) else [s for (_d, _m, s) in hits]
+            kept = [(d, g) for (d, _m, _s), g in zip(hits, grades) if g >= self.tau_lower]
+            return kept[: self.max_refine_docs]
         try:
             q_emb = self._base.embed_text(query)
         except Exception:
@@ -218,31 +239,46 @@ class CorrectiveRetriever:
     def retrieve(self, query: str, k: Optional[int] = None) -> str:
         """Return a CRAG-refined context block, or "" to fall back to baseline."""
         if not self.enabled or not query:
+            self.last_trace = {"mode": "corrective", "action": "disabled"}
             return ""
         self.stats["calls"] += 1
         try:
             hits = self._base.query_hits(query, k or self.k)
         except Exception:
+            self.last_trace = {"mode": "corrective", "action": "error"}
             return ""
-        verdict = self._grade(self._scores(query, hits))
+        scores = self._scores(query, hits)
+        verdict = self._grade(scores)
+        trace = {"mode": "corrective", "grader": self._grader_name(), "refine": self.refine,
+                 "hits": hits_summary(hits, scores), "verdict": verdict, "rewrite": False}
+        self.last_trace = trace
 
         if verdict == INCORRECT:
             rq = self._reformulate(query)
             if rq == query:
                 self.stats["withheld"] += 1
+                trace["action"] = "withheld"
                 return ""  # nothing to correct with -> withhold context
             self.stats["rewrites"] += 1
+            trace["rewrite"] = True
             try:
                 hits2 = self._base.query_hits(rq, k or self.k)
             except Exception:
                 hits2 = []
-            verdict2 = self._grade(self._scores(rq, hits2)) if hits2 else INCORRECT
+            scores2 = self._scores(rq, hits2) if hits2 else []
+            verdict2 = self._grade(scores2) if hits2 else INCORRECT
+            trace["rewrite_hits"] = hits_summary(hits2, scores2)
+            trace["rewrite_verdict"] = verdict2
             if verdict2 == INCORRECT:
                 self.stats["withheld"] += 1
+                trace["action"] = "withheld"
                 return ""  # still weak -> withhold rather than mislead
-            hits, verdict, query = hits2, verdict2, rq
+            hits, scores, verdict, query = hits2, scores2, verdict2, rq
 
-        refined = self._refine(query, hits)
+        refined = self._refine(query, hits, scores)
+        trace["injected_refs"] = len(refined)
         if not refined:
+            trace["action"] = "empty"
             return ""
+        trace["action"] = "used"
         return self._format(refined, verdict)

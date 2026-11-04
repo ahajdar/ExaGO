@@ -1092,6 +1092,8 @@ class SearchJournal:
             data["rag_config"] = self.rag_config
         if getattr(self, "discarded_actions", None):
             data["discarded_actions"] = self.discarded_actions
+        if getattr(self, "rag_log", None):
+            data["rag_log"] = self.rag_log
         path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         logger.info("Journal exported to %s (%d entries)", path, len(self._entries))
 
