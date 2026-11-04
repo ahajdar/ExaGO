@@ -59,6 +59,9 @@ class JournalEntry:
     # applied; None = not recorded (non-modify entries, older journals). Lets the
     # corpus scraper certify that an exemplar's `commands` all actually applied.
     skipped_commands: Optional[list[str]] = None
+    # Solve iterations: the solver's violation lines (first 20), as the agent saw
+    # them. Lets offline tools rebuild the state-dependent retrieval query.
+    violation_details: Optional[list[str]] = None
 
 
 def is_solve_iteration(entry: JournalEntry) -> bool:
@@ -329,6 +332,7 @@ class SearchJournal:
                 explored_variants=explored_variants,
                 tracked_metrics=tracked_metrics,
                 exago_command=exago_command,
+                violation_details=list(getattr(opflow_result, "violation_details", None) or [])[:20] or None,
             )
         else:
             entry = JournalEntry(
@@ -1111,7 +1115,7 @@ class SearchJournal:
             "mode", "elapsed_seconds", "timestamp", "steering_directive",
             "tracked_metrics", "feasibility_detail", "solver", "num_steps", "num_scenarios",
             "explored_variants", "candidate_count", "feasible_buses", "exago_command",
-            "contingency_meta", "reserve_meta", "skipped_commands",
+            "contingency_meta", "reserve_meta", "skipped_commands", "violation_details",
         ]
 
         with open(path, "w", newline="", encoding="utf-8") as f:
@@ -1127,6 +1131,7 @@ class SearchJournal:
                 row["contingency_meta"] = json.dumps(row.get("contingency_meta") or None)
                 row["reserve_meta"] = json.dumps(row.get("reserve_meta") or None)
                 row["skipped_commands"] = json.dumps(row.get("skipped_commands"))
+                row["violation_details"] = json.dumps(row.get("violation_details"))
                 writer.writerow(row)
 
         logger.info("Journal CSV exported to %s (%d entries)", path, len(self._entries))

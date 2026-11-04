@@ -163,3 +163,22 @@ Every retrieval run journals `rag_log`: one record per iteration with the query,
 its SHA-256, the scored hits (source, similarity, grade, 16-hex content hash), the corrective verdict,
 whether the query was rewritten, the action (used / empty / withheld / error) and
 a hash of the injected block. `rag_config.query_mode` records the query mode.
+
+## Replay preview (state-dependent queries)
+
+`replay_preview.py` rebuilds, from recorded journals, the state the agent saw
+before every LLM iteration (latest solve, previous command errors), builds the
+`goal` / `state` / `error` queries exactly as the agent loop does, and runs each
+through basic retrieval and corrective retrieval (refine `whole`) with the cosine
+and reranker graders on the frozen store. No LLM, no solver.
+
+    python rag/tools/replay_preview.py --runs experiments/ofrecord_v3 --out experiments/replay_preview_v1
+
+It prints, per query mode, how often the retrieved chunk set changes between
+iterations, each grader's share of non-CORRECT verdicts and withheld context,
+and how often the graders disagree; `summary.json` has the same per goal.
+`pairs.csv` (+ `queries.jsonl`, `chunks.jsonl`) is the pool for human relevance
+labels. Journals written before the `violation_details` entry field (e.g.
+ofrecord_v3) lack the solver's violation lines, so replayed state/error queries
+omit that line; new runs record it. Thresholds default to the untuned
+0.30 / 0.50 (`--tau-cosine`, `--tau-reranker`).

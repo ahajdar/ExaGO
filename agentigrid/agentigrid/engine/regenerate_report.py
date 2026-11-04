@@ -111,6 +111,7 @@ def load_journal_export(path: Path) -> SearchJournal:
             contingency_meta=ed.get("contingency_meta"),
             reserve_meta=ed.get("reserve_meta"),
             skipped_commands=ed.get("skipped_commands"),
+            violation_details=ed.get("violation_details"),
         ))
 
     # Rebuild the objective registry, then overwrite its history with the saved

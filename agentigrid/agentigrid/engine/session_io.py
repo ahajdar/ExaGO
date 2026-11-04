@@ -185,6 +185,7 @@ def load_session(save_dir: Path) -> dict[str, Any]:
             contingency_meta=entry_data.get("contingency_meta"),
             reserve_meta=entry_data.get("reserve_meta"),
             skipped_commands=entry_data.get("skipped_commands"),
+            violation_details=entry_data.get("violation_details"),
         )
         journal_entries.append(entry)
 
