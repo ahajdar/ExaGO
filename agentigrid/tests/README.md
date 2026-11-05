@@ -19,6 +19,12 @@ Tests are grouped by the part of AgentiGrid they cover:
 | `evaluation/` | Experiment runner, evaluator, statistics, goal attainment and base-case pre-checks (`rag/tools/experiment_*`, `precheck_cases.py`) |
 | `fixtures/` | Shared sample files (e.g. `sample_opflow_output.txt`) |
 
+`fixtures/sample_opflow_output.txt` is OPFLOW output for `case_ACTIVSg200.m` as
+rewritten by AgentiGrid; `results/test_opflow_parser.py` checks values from it.
+If you regenerate it, write the case with the current MATPOWER writer (so the
+fuel types survive) and update the expected values in `results/test_opflow_parser.py`;
+`test_fuel_mix_matches_case_file` fails if the fuel mix is lost again.
+
 Run the fast tests from the AgentiGrid root:
 
 ```bash
