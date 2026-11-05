@@ -90,7 +90,7 @@ def network_of(entry: dict) -> str | None:
 
 def _commands_parse(cmds) -> bool:
     try:
-        from agentigrid.engine.commands import parse_command
+        from agentigrid.exago_engine.commands import parse_command
     except Exception:
         return False
     try:

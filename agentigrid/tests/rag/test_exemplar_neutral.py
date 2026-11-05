@@ -135,7 +135,7 @@ def test_shipped_corpus_is_neutral_and_matches_its_manifest():
 
 
 def test_retrieved_references_carry_the_network_caution(tmp_path, monkeypatch):
-    from agentigrid.engine import agent_loop as al
+    from agentigrid.exago_engine import agent_loop as al
     from tests.agent_loop.test_agent_loop import (
         BASE_CASE, MockBackend, _has_base_case, _has_sample, _make_config, _make_llm_response,
         _make_sim_result, _objectives_response, _sample_stdout,
@@ -154,9 +154,9 @@ def test_retrieved_references_carry_the_network_caution(tmp_path, monkeypatch):
 
     backend = MockBackend([_objectives_response(),
                            _make_llm_response({"action": "complete", "reasoning": "ok", "findings": {"summary": "ok"}})])
-    with patch("agentigrid.engine.agent_loop.create_backend", return_value=backend), \
-         patch("agentigrid.engine.agent_loop.SimulationExecutor") as ex, \
-         patch("agentigrid.engine.agent_loop.build_retriever", return_value=_Ret()):
+    with patch("agentigrid.exago_engine.agent_loop.create_backend", return_value=backend), \
+         patch("agentigrid.exago_engine.agent_loop.SimulationExecutor") as ex, \
+         patch("agentigrid.exago_engine.agent_loop.build_retriever", return_value=_Ret()):
         ex.return_value = MagicMock(run=MagicMock(return_value=_make_sim_result(stdout=_sample_stdout(), success=True)))
         al.AgentLoopController(_make_config(tmp_path, max_iterations=2)).run(BASE_CASE, "Lower the cost")
     prompt = backend.calls[1][1]

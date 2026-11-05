@@ -149,7 +149,7 @@ def test_freeze_refuses_on_findings_and_hashes(tmp_path):
 
 
 def test_journal_roundtrips_skipped_commands(tmp_path):
-    from agentigrid.engine.journal import JournalEntry, SearchJournal
+    from agentigrid.exago_engine.journal import JournalEntry, SearchJournal
     j = SearchJournal()
     e = JournalEntry(iteration=1, description="d", commands=[], objective_value=1.0, feasible=True,
                      convergence_status="CONVERGED", violations_count=0, voltage_min=1.0, voltage_max=1.0,

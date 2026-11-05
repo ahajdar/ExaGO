@@ -124,7 +124,7 @@ def test_summary_gate_metrics():
 
 def test_journal_entries_now_record_violation_details():
     from types import SimpleNamespace
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.journal import SearchJournal
     j = SearchJournal()
     res = SimpleNamespace(feasibility_detail="infeasible", num_violations=2, converged=True, losses_mw=1.0,
                           total_load_mw=100.0, objective_value=1.0, convergence_status="CONVERGED",
@@ -138,7 +138,7 @@ def test_journal_entries_now_record_violation_details():
 def test_violation_details_survive_csv_export_and_session_reload(tmp_path):
     import csv as _csv, json as _json
     from types import SimpleNamespace
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.journal import SearchJournal
     j = SearchJournal()
     res = SimpleNamespace(feasibility_detail="infeasible", num_violations=1, converged=True, losses_mw=1.0,
                           total_load_mw=100.0, objective_value=1.0, convergence_status="CONVERGED",

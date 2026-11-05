@@ -144,7 +144,7 @@ def test_runner_refuses_unknown_query_and_refine_values():
 
 
 def test_journal_exports_rag_log(tmp_path):
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.journal import SearchJournal
     j = SearchJournal()
     j.rag_log = [{"iteration": 1, "query_mode": "state", "action": "used"}]
     p = tmp_path / "j.json"
@@ -156,8 +156,8 @@ def test_journal_exports_rag_log(tmp_path):
 
 
 def test_agent_loop_logs_each_retrieval():
-    from agentigrid.engine.agent_loop import AgentLoopController as AgentLoop
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.agent_loop import AgentLoopController as AgentLoop
+    from agentigrid.exago_engine.journal import SearchJournal
     loop = AgentLoop.__new__(AgentLoop)
     loop._rag_query_mode = "state"
     loop._journal = SearchJournal()

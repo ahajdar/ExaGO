@@ -56,7 +56,7 @@ def test_scopflow_args_match_agentigrid():
 
 
 def test_write_stressed_scales_loads(tmp_path):
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     case = ROOT.parent / "datafiles" / "case9" / "case9mod.m"
     out = pc.write_stressed(case, 1.2, tmp_path)
     base, scaled = parse_matpower(case), parse_matpower(out)
@@ -84,7 +84,7 @@ def test_scopflow_args_use_absolute_path(tmp_path, monkeypatch):
 
 
 def test_write_stressed_with_voltage_band(tmp_path):
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     case = ROOT.parent / "datafiles" / "case9" / "case9mod.m"
     out = pc.write_stressed(case, 1.1, tmp_path, (0.95, 1.05))
     assert out.name == "case9mod_load1.1_v0.95-1.05.m"
@@ -111,7 +111,7 @@ needs_200 = pytest.mark.skipif(not G200.exists(), reason="ExaGO datafiles not pr
 
 @needs_200
 def test_slack_check_flags_unphysical_scales():
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     base = parse_matpower(G200)
     assert pc.slack_check(pc.stressed_network(base, 0.9), base)["within_limits"] is True
     for f in (0.7, 1.3):   # slack would go below Pmin / above Pmax
@@ -121,7 +121,7 @@ def test_slack_check_flags_unphysical_scales():
 @needs_200
 @pytest.mark.parametrize("factor", [0.7, 1.3, 1.5])
 def test_agc_redispatch_balances_within_limits(factor):
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     base = parse_matpower(G200)
     net = pc.stressed_network(base, factor, agc=True)
     d_load = sum(b.Pd for b in net.buses) - sum(b.Pd for b in base.buses)
@@ -142,7 +142,7 @@ def test_agc_redispatch_balances_within_limits(factor):
 
 
 def test_agc_raises_when_fleet_cannot_absorb(tmp_path):
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     base = parse_matpower(ROOT.parent / "datafiles" / "case9" / "case9mod.m")
     with pytest.raises(ValueError):
         pc.agc_redispatch(base, 1e6)
@@ -167,7 +167,7 @@ def test_parse_outage():
 
 @needs_200
 def test_branch_keys_islanding_and_outage_variant(tmp_path):
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     base = parse_matpower(G200)
     keys = pc.branch_keys(base)
     assert len(keys) == len(base.branches) and len(set(keys)) == len(keys)
@@ -196,7 +196,7 @@ def test_greedy_commitment_keeps_only_improving_units():
 
 @needs_200
 def test_gen_keys_address_units_like_set_gen_status():
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     net = parse_matpower(G200)
     keys = pc.gen_keys(net)
     assert len(keys) == len(net.generators) and len(set(keys)) == len(keys)

@@ -184,11 +184,11 @@ def scopflow_args(ctgc: Path, mpi_np: int) -> list[str]:
 
 def run_scan(cfg, case: Path, ctgc: Path, scales: list[float], apps: tuple[str, ...],
              vband: tuple[float, float] | None = None, agc: bool = False):
-    from agentigrid.engine.commands import ScaleAllLoads
-    from agentigrid.engine.executor import SimulationExecutor
-    from agentigrid.engine.modifier import apply_modifications
-    from agentigrid.parsers import parse_simulation_result_for_app
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_engine.commands import ScaleAllLoads
+    from agentigrid.exago_engine.executor import SimulationExecutor
+    from agentigrid.exago_engine.modifier import apply_modifications
+    from agentigrid.exago_parsers import parse_simulation_result_for_app
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
 
     base_net = parse_matpower(case)
     limits = {b.bus_i: (b.Vmin, b.Vmax) for b in base_net.buses}
@@ -346,8 +346,8 @@ def islands_without(net, skip_index: int) -> bool:
 
 
 def with_outage(net, outage: tuple[int, int, int]):
-    from agentigrid.engine.commands import SetBranchStatus
-    from agentigrid.engine.modifier import apply_modifications
+    from agentigrid.exago_engine.commands import SetBranchStatus
+    from agentigrid.exago_engine.modifier import apply_modifications
 
     fbus, tbus, ckt = outage
     out, _ = apply_modifications(net, [SetBranchStatus(fbus=fbus, tbus=tbus, status=0, ckt=ckt)])
@@ -355,8 +355,8 @@ def with_outage(net, outage: tuple[int, int, int]):
 
 
 def stressed_network(base_net, factor: float, agc: bool = False, outage=None):
-    from agentigrid.engine.commands import ScaleAllLoads
-    from agentigrid.engine.modifier import apply_modifications
+    from agentigrid.exago_engine.commands import ScaleAllLoads
+    from agentigrid.exago_engine.modifier import apply_modifications
 
     net, _ = apply_modifications(base_net, [ScaleAllLoads(factor=factor)])
     if agc:
@@ -370,8 +370,8 @@ def stressed_network(base_net, factor: float, agc: bool = False, outage=None):
 def write_stressed(case: Path, factor: float, out_dir: Path,
                    vband: tuple[float, float] | None = None, agc: bool = False,
                    outage: tuple[int, int, int] | None = None) -> Path:
-    from agentigrid.parsers.matpower_parser import parse_matpower
-    from agentigrid.parsers.matpower_writer import write_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_writer import write_matpower
 
     net = stressed_network(parse_matpower(case), factor, agc, outage)
     suffix = f"_load{factor:g}" + ("_agc" if agc else "")
@@ -424,11 +424,11 @@ def cost_headroom(cfg, case: Path, app: str, ctgc: Path, scale: float, agc: bool
     even at Pmin). Solves the baseline, every single commitment change, and a
     greedy combination. Taps, shunts and phase shifters are not searched, so the
     result is a lower bound on the achievable saving."""
-    from agentigrid.engine.commands import SetGenStatus
-    from agentigrid.engine.executor import SimulationExecutor
-    from agentigrid.engine.modifier import apply_modifications
-    from agentigrid.parsers import parse_simulation_result_for_app
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_engine.commands import SetGenStatus
+    from agentigrid.exago_engine.executor import SimulationExecutor
+    from agentigrid.exago_engine.modifier import apply_modifications
+    from agentigrid.exago_parsers import parse_simulation_result_for_app
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
 
     base_file = parse_matpower(case)
     base = base_file if abs(scale - 1.0) < 1e-12 else stressed_network(base_file, scale, agc)
@@ -476,9 +476,9 @@ def outage_scan(cfg, case: Path, scale: float, agc: bool, vband, top: int = 15) 
     outage, then OPFLOW for the *top* outages by overload count / max loading.
     A usable relieve case: PFLOW converges with >= 1 overload, the slack stays
     inside its limits, and OPFLOW with the outage is feasible (a fix exists)."""
-    from agentigrid.engine.executor import SimulationExecutor
-    from agentigrid.parsers import parse_simulation_result_for_app
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_engine.executor import SimulationExecutor
+    from agentigrid.exago_parsers import parse_simulation_result_for_app
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
 
     base_file = parse_matpower(case)
     base = base_file if abs(scale - 1.0) < 1e-12 else stressed_network(base_file, scale, agc)

@@ -146,7 +146,7 @@ def test_pending_case_refused_unless_skipped(monkeypatch, tmp_path, capsys):
 def test_frozen_spec_cases_exist_and_keep_genfuel():
     """Frozen variants must be present, scaled as named, and readable by ExaGO
     (genfuel closed by '};' -- see test_matpower_cell_terminators)."""
-    from agentigrid.parsers.matpower_parser import parse_matpower
+    from agentigrid.exago_parsers.matpower_parser import parse_matpower
     spec = json.loads((ROOT / "grader_ablation_spec.json").read_text())
     base = ROOT.parent / "datafiles" / "case_ACTIVSg200.m"
     if not base.exists():

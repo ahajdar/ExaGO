@@ -14,9 +14,9 @@ from pathlib import Path
 
 import pytest
 
-from agentigrid.parsers.matpower_model import MATNetwork
-from agentigrid.parsers.matpower_parser import parse_matpower
-from agentigrid.parsers.matpower_writer import write_matpower
+from agentigrid.exago_parsers.matpower_model import MATNetwork
+from agentigrid.exago_parsers.matpower_parser import parse_matpower
+from agentigrid.exago_parsers.matpower_writer import write_matpower
 
 ROOT = Path(__file__).resolve().parents[2]
 ACTIVSG200 = ROOT.parent / "datafiles" / "case_ACTIVSg200.m"

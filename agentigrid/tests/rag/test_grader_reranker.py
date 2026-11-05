@@ -103,7 +103,7 @@ def test_journal_and_evaluator_carry_rag_config(tmp_path):
     import importlib.util
     import json
     from pathlib import Path
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.journal import SearchJournal
 
     j = SearchJournal()
     j.rag_config = {"mode": "corrective", "mode_env": "corrective", "grader": "reranker",

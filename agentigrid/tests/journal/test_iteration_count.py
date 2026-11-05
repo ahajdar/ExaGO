@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agentigrid.engine.journal import SearchJournal, format_iteration_count
+from agentigrid.exago_engine.journal import SearchJournal, format_iteration_count
 
 from tests.journal.test_journal import _make_entry
 

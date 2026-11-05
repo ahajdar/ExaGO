@@ -243,7 +243,7 @@ def resolve_guards(guards, case_path, project_root: Path):
     out = []
     for g in guards:
         if isinstance(g, dict) and g.get("vband_not_widened") == "case":
-            from agentigrid.parsers.matpower_parser import parse_matpower
+            from agentigrid.exago_parsers.matpower_parser import parse_matpower
             path = Path(case_path)
             path = path if path.is_absolute() else project_root / path
             net = parse_matpower(path)

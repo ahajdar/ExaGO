@@ -156,7 +156,7 @@ def test_usage_meter_counts_all_calls_and_is_transparent():
 
 def test_journal_exports_llm_usage(tmp_path):
     import json
-    from agentigrid.engine.journal import SearchJournal
+    from agentigrid.exago_engine.journal import SearchJournal
 
     j = SearchJournal()
     j.llm_usage = {"calls": 2, "prompt_tokens": 100, "completion_tokens": 5,

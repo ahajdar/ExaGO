@@ -161,8 +161,8 @@ def certify(ex: dict, ref_net) -> str:
 
     Returns the certification label; raises ValueError if the exemplar is invalid.
     """
-    from agentigrid.engine.commands import parse_command
-    from agentigrid.engine.modifier import apply_modifications
+    from agentigrid.exago_engine.commands import parse_command
+    from agentigrid.exago_engine.modifier import apply_modifications
 
     resp = ex["response"]
     action = resp.get("action")
@@ -222,7 +222,7 @@ def render(ex: dict, label: str) -> str:
 def build(ref_case: Path | None) -> list[str]:
     ref_net = None
     if ref_case is not None and ref_case.exists():
-        from agentigrid.parsers.matpower_parser import parse_matpower
+        from agentigrid.exago_parsers.matpower_parser import parse_matpower
         ref_net = parse_matpower(ref_case)
     return [render(ex, certify(ex, ref_net)) for ex in EXEMPLARS]
 
