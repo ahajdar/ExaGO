@@ -124,6 +124,15 @@ def unimplemented_reason(cond):
             return f"cannot verify {var} ({exc})"
         if str(val).strip().lower() not in valid:
             return f"{var}={val!r} not implemented (valid: {', '.join(valid)})"
+    for var in ("AGENTIGRID_CRAG_TAU_LOWER", "AGENTIGRID_CRAG_TAU_UPPER"):
+        val = env.get(var)
+        if val is None:
+            continue
+        try:
+            float(val)
+        except (TypeError, ValueError):
+            return (f"{var}={val!r} is not a number (fill in the thresholds fitted by "
+                    "rag/tools/crag_labels.py score)")
     grader = env.get("AGENTIGRID_CRAG_GRADER")
     if grader is not None:
         g = str(grader).strip().lower()

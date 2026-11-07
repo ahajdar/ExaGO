@@ -500,6 +500,57 @@ def metrics_for(journal: dict, manifest: dict) -> dict:
         **vm,
         **usage_metrics(journal),
         **rag_metrics(journal),
+        **band_metrics(dict_entries, guards),
+        **rag_log_metrics(journal),
+    }
+
+
+def band_metrics(entries, guards) -> dict:
+    """Executed voltage-band commands in the run, compared with the case band
+    (the vband_not_widened guard's [lo, hi]). Counts commands, and flags whether
+    any of them narrowed or widened the band; band_* are None when the goal has no
+    band guard. Independent of --vband-check, so both readings can be compared."""
+    band = next((arg for name, arg in guards if name == "vband_not_widened"), None)
+    n = narrowed = widened = 0
+    for e in entries:
+        if not isinstance(e, dict) or e.get("iteration", 0) == 0:
+            continue
+        for c in (e.get("commands") or []):
+            if not isinstance(c, dict) or str(c.get("action", "")).lower() not in ("set_bus_vlimits", "set_all_bus_vlimits"):
+                continue
+            n += 1
+            if band is None:
+                continue
+            lo, hi = band
+            vmin, vmax = _num(c.get("Vmin")), _num(c.get("Vmax"))
+            narrowed |= (vmin is not None and vmin > lo + 1e-6) or (vmax is not None and vmax < hi - 1e-6)
+            widened |= (vmin is not None and vmin < lo - 1e-6) or (vmax is not None and vmax > hi + 1e-6)
+    return {"band_cmds": n,
+            "band_narrowed": int(narrowed) if band is not None else None,
+            "band_widened": int(widened) if band is not None else None}
+
+
+def rag_log_metrics(journal: dict) -> dict:
+    """Per-iteration retrieval log (journal ``rag_log``, written by state-query
+    runs): retrieval iterations, iterations whose references were used or
+    withheld, non-CORRECT verdicts, query rewrites, and the mean number of
+    references injected. None for journals without a rag_log (e.g. paper 1)."""
+    log = journal.get("rag_log") if isinstance(journal, dict) else None
+    keys = ("rag_log_iters", "rag_log_used", "rag_log_withheld", "rag_log_noncorrect",
+            "rag_log_rewrites", "rag_log_mean_refs", "rag_log_query_mode")
+    if not isinstance(log, list) or not log:
+        return {k: None for k in keys}
+    recs = [r for r in log if isinstance(r, dict)]
+    refs = [r.get("injected_refs", r.get("kept")) for r in recs]
+    refs = [x for x in refs if isinstance(x, (int, float))]
+    return {
+        "rag_log_iters": len(recs),
+        "rag_log_used": sum(r.get("action") == "used" for r in recs),
+        "rag_log_withheld": sum(r.get("action") == "withheld" for r in recs),
+        "rag_log_noncorrect": sum(r.get("verdict") in ("ambiguous", "incorrect") for r in recs),
+        "rag_log_rewrites": sum(bool(r.get("rewrite")) for r in recs),
+        "rag_log_mean_refs": round(sum(refs) / len(refs), 3) if refs else None,
+        "rag_log_query_mode": recs[0].get("query_mode"),
     }
 
 

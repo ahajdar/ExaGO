@@ -222,3 +222,27 @@ grader gets no threshold; `score` prints whether it is due.
 
     python rag/tools/crag_labels.py make --replay experiments/replay_preview_v2 --out labels/crag_labels_v1.xlsx
     python rag/tools/crag_labels.py score --sheet labels/crag_labels_v1_filled.xlsx --key labels/crag_labels_v1_key.csv
+
+## CRAG campaign (paper 2)
+
+Specs: `rag/tools/specs/crag_spec.json` (of-record: C0, C1g, C1e, C2c, C2r × 6
+cells × 3 models × 20 reps; out_dir `experiments/crag_v1`) and
+`rag/tools/specs/crag_pilot_spec.json` (gate 2, not of-record: C1e and C2r with
+default thresholds, 1 rep; out_dir `experiments/crag_pilot`). C1e, C2c and C2r use
+`AGENTIGRID_RAG_QUERY=error` and `rag/store_core_docs`; C1g uses the goal query on
+the same store, so C1g vs C1e isolates the query. The corrective thresholds are
+placeholders: the runner refuses any non-numeric `AGENTIGRID_CRAG_TAU_*`, so fill
+in the values from `crag_labels.py score` before running.
+
+The evaluator adds per run `band_cmds`, `band_narrowed`, `band_widened` (executed
+voltage-band commands vs the case band) and `rag_log_*` (retrieval iterations,
+used, withheld, non-CORRECT, rewrites, mean injected references, query mode).
+`crag_stats.py` pairs runs by (case, goal, model, rep) and reports, pooled and
+per model, Wilcoxon tests with bootstrap CIs for valid-proposal rate,
+validator-rejection rate and cost improvement, and exact McNemar tests for goal
+attainment and band narrowing; `--primary treat:ctrl:metric,...` names the
+confirmatory family (Holm), everything else is exploratory.
+
+    python rag/tools/experiment_runner.py --spec rag/tools/specs/crag_pilot_spec.json
+    python rag/tools/experiment_eval.py --runs experiments/crag_v1
+    python rag/tools/crag_stats.py --per-run experiments/crag_v1/analysis/per_run.csv
