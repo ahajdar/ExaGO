@@ -1,7 +1,8 @@
 {
   "notes": [
     "CRAG experiment (paper 2), of-record spec. Conditions: C0 and C1g re-run the paper-1 conditions under the current code (the agent code and system prompt changed with the develop and genfuel merges after ofrecord_v3, so paper-1 runs are not same-code anchors), C1g on the combined store so that C1g vs C1e isolates the query; C1e, C2c-cosine and C2r-reranker share the error query (AGENTIGRID_RAG_QUERY=error) and the combined store (frozen core corpus + ExaGO documentation corpus, rag/store_core_docs) and differ only in the corrective step and the grader. Corrective conditions use whole-chunk refinement. Their thresholds are placeholders: the runner refuses them until the values fitted by rag/tools/crag_labels.py score are filled in, before any run. Drop C0/C1g to save runs only if comparisons with them are to be descriptive (Amir to decide).",
-    "Label design and stopping rule: see rag/tools/crag_labels.py (50 pairs, definition B, fixed 2026-11-05)."
+    "Label design and stopping rule: see rag/tools/crag_labels.py (50 pairs, definition B, fixed 2026-11-05).",
+    "Machine split (Amir, 2026-11-10): every run of a model stays on one machine, so no paired comparison spans machines. Work PC (RTX 5060 8 GB): llama3.1:8b (Ollama 46e0c10c039e), qwen2.5:7b (845dbda0ea48), claude-sonnet-5-5. Home laptop (RTX 3080 Ti Laptop 16 GB): qwen2.5:14b (7cdf5a0187d5; about 15 GB at a 32k window, 95% on the GPU). Both machines run commit dae1fb0 (tag crag-code-v1) and store rag/store_core_docs (combined sha256 4a103b74...). Copy each machine's run folders into the one out_dir before evaluating."
   ],
   "agentigrid_cmd": "agentigrid",
   "project_root": ".",
@@ -214,6 +215,11 @@
     {
       "backend": "anthropic",
       "model": "claude-sonnet-5-5",
+      "extra_args": []
+    },
+    {
+      "backend": "ollama",
+      "model": "qwen2.5:14b",
       "extra_args": []
     }
   ]

@@ -102,3 +102,21 @@ def test_crag_stats_primary_family_and_exploratory(tmp_path):
     assert not valid["primary"] and valid["median_diff"] > 0
     assert cs.main(["--per-run", str(p)]) == 0
     assert json.loads((tmp_path / "crag_stats.json").read_text())["status"].startswith("all exploratory")
+
+
+def test_per_machine_splits_cover_the_master_specs_exactly():
+    for name in ("crag_spec", "crag_pilot_spec"):
+        master = json.loads((ROOT / f"rag/tools/specs/{name}.json").read_text())
+        parts = [json.loads((ROOT / f"rag/tools/specs/{name}_{t}.json").read_text()) for t in ("workpc", "homepc")]
+        models = [m["model"] for p in parts for m in p["models"]]
+        assert sorted(models) == sorted(m["model"] for m in master["models"])          # each model once
+        assert "qwen2.5:14b" in models
+        assert [m["model"] for m in parts[1]["models"]] == ["qwen2.5:14b"]
+        for p in parts:
+            for k in ("conditions", "cases", "goals", "reps", "out_dir", "env", "max_iter"):
+                assert p[k] == master[k]
+    sp = _load("split_spec", "rag/tools/split_spec.py")
+    master = json.loads((ROOT / "rag/tools/specs/crag_spec.json").read_text())
+    import pytest
+    with pytest.raises(SystemExit):
+        sp.split(master, "crag_spec.json", "x", ["no-such-model"])

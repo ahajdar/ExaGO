@@ -1,6 +1,7 @@
 {
   "notes": [
-    "Pilot for the CRAG experiment (gate 2), NOT of-record: 1 repetition of C1e and of C2r-reranker with the untuned default thresholds (0.30/0.50), to check the harness, the 32k context window on the run machine, prompt lengths with whole chunks, the rag_log and violation lines in live journals, grader latency on CPU, and cost per run."
+    "Pilot for the CRAG experiment (gate 2), NOT of-record: 1 repetition of C1e and of C2r-reranker with the untuned default thresholds (0.30/0.50), to check the harness, the 32k context window on the run machine, prompt lengths with whole chunks, the rag_log and violation lines in live journals, grader latency on CPU, and cost per run.",
+    "Machine split (Amir, 2026-11-10): every run of a model stays on one machine, so no paired comparison spans machines. Work PC (RTX 5060 8 GB): llama3.1:8b (Ollama 46e0c10c039e), qwen2.5:7b (845dbda0ea48), claude-sonnet-5-5. Home laptop (RTX 3080 Ti Laptop 16 GB): qwen2.5:14b (7cdf5a0187d5; about 15 GB at a 32k window, 95% on the GPU). Both machines run commit dae1fb0 (tag crag-code-v1) and store rag/store_core_docs (combined sha256 4a103b74...). Copy each machine's run folders into the one out_dir before evaluating."
   ],
   "agentigrid_cmd": "agentigrid",
   "project_root": ".",
@@ -177,6 +178,11 @@
     {
       "backend": "anthropic",
       "model": "claude-sonnet-5-5",
+      "extra_args": []
+    },
+    {
+      "backend": "ollama",
+      "model": "qwen2.5:14b",
       "extra_args": []
     }
   ]
