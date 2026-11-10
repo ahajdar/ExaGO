@@ -120,3 +120,18 @@ def test_per_machine_splits_cover_the_master_specs_exactly():
     import pytest
     with pytest.raises(SystemExit):
         sp.split(master, "crag_spec.json", "x", ["no-such-model"])
+def test_runner_finds_journals_in_engine_subfolder(tmp_path):
+    import time
+    wd = tmp_path / "workdir"
+    (wd / "exago").mkdir(parents=True)
+    (wd / "journal_old.json").write_text("{}")
+    before = er.journal_files(wd)
+    time.sleep(0.01)
+    new = wd / "exago" / "journal_20261110_120000.json"
+    new.write_text("{}")
+    assert er.newest_new_journal(wd, before) == new          # current code writes workdir/exago/
+    before = er.journal_files(wd)
+    flat = wd / "journal_20261110_120500.json"
+    flat.write_text("{}")
+    assert er.newest_new_journal(wd, before) == flat         # older code wrote workdir/
+    assert er.newest_new_journal(wd, er.journal_files(wd)) is None

@@ -6,7 +6,8 @@ toggling the RAG ablation via environment variables, and captures each run's
 exported journal JSON + a manifest. It changes nothing about AgentiGrid; it only
 orchestrates repeated CLI invocations and collects their outputs.
 
-Pairing runs to journals: AgentiGrid writes workdir/journal_<timestamp>.json.
+Pairing runs to journals: AgentiGrid writes workdir/journal_<timestamp>.json (older code) or
+workdir/<engine>/journal_<timestamp>.json, e.g. workdir/exago/ (current code); both are searched.
 This script snapshots workdir before each run and grabs the newly created file
 after — so runs MUST be sequential (they are here).
 
@@ -153,8 +154,20 @@ def unimplemented_reason(cond):
     return None
 
 
+JOURNAL_GLOBS = ("journal_*.json", "*/journal_*.json")
+
+
+def journal_files(workdir: Path) -> set[str]:
+    """Journals AgentiGrid may have written: directly in workdir (older code) or in
+    an engine subfolder such as workdir/exago/ (after the engine refactor)."""
+    out: set[str] = set()
+    for pat in JOURNAL_GLOBS:
+        out.update(glob.glob(str(workdir / pat)))
+    return out
+
+
 def newest_new_journal(workdir: Path, before: set[str]) -> Path | None:
-    after = set(glob.glob(str(workdir / "journal_*.json")))
+    after = journal_files(workdir)
     fresh = [Path(p) for p in (after - before)]
     if not fresh:
         return None
@@ -312,7 +325,7 @@ def run_one(spec, case, goal, cond, model, rep, out_dir, project_root, workdir, 
 
     run_dir.mkdir(parents=True, exist_ok=True)
     log_path = run_dir / "run.log"
-    before = set(glob.glob(str(workdir / "journal_*.json")))
+    before = journal_files(workdir)
     start = time.time()
     timed_out = False
     try:
