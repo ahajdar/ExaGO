@@ -27,6 +27,7 @@ import csv
 import glob
 import json
 import math
+import re
 import statistics
 from pathlib import Path
 
@@ -554,6 +555,33 @@ def rag_log_metrics(journal: dict) -> dict:
     }
 
 
+_TOKEN_LINE = re.compile(r"\[Iter (\d+)\] Tokens: (\d+) prompt \+ (\d+) completion")
+
+
+def runaway_metrics(log_path, manifest: dict) -> dict:
+    """LLM calls whose output hit the token cap (runaway generation), from the
+    run log's "[Iter N] Tokens: P prompt + C completion" lines. The cap is the
+    run's AGENTIGRID_MAX_TOKENS (spec_env, then condition_env). A capped output is
+    discarded by the validator at any cap, so this is a time/robustness measure,
+    not an outcome. None when the log or the cap is missing."""
+    keys = ("llm_calls_logged", "llm_max_completion_per_call", "llm_runaway_calls")
+    env = {**(manifest.get("condition_env") or {}), **(manifest.get("spec_env") or {})}
+    try:
+        cap = int(str(env.get("AGENTIGRID_MAX_TOKENS", "")).strip())
+    except ValueError:
+        cap = None
+    try:
+        text = Path(log_path).read_text(errors="replace") if log_path else ""
+    except OSError:
+        text = ""
+    comps = [int(m.group(3)) for m in _TOKEN_LINE.finditer(text)]
+    if not comps:
+        return {k: None for k in keys}
+    return {"llm_calls_logged": len(comps),
+            "llm_max_completion_per_call": max(comps),
+            "llm_runaway_calls": sum(c >= cap for c in comps) if cap else None}
+
+
 def rag_metrics(journal: dict) -> dict:
     """What retrieval actually did in the run (journal ``rag_config``).
 
@@ -626,6 +654,7 @@ def collect_runs(runs_dir: Path):
             "exit_code": manifest.get("exit_code"),
         }
         row.update(metrics_for(journal, manifest))
+        row.update(runaway_metrics(mpath.parent / "run.log", manifest))
         rows.append(row)
     return rows
 
@@ -649,7 +678,7 @@ NUMERIC = ["cost_improvement_pct", "valid_proposal_rate", "valid_proposal_rate_z
            "valid_proposal_rate_maxiter", "solve_elapsed_s",
            "llm_prompt_tokens", "llm_completion_tokens",
            "llm_cache_creation_tokens", "llm_cache_read_tokens",
-           "n_solve_iters", "wall_s",
+           "n_solve_iters", "wall_s", "llm_runaway_calls",
            "validator_rejection_rate", "intent_violation_rate",   # H3
            "iterations_to_goal"]  # mean over runs that attained the goal only
 RATE = ["any_feasible", "goal_attained", "baseline_attained"]  # averaged as proportions

@@ -135,3 +135,15 @@ def test_runner_finds_journals_in_engine_subfolder(tmp_path):
     flat.write_text("{}")
     assert er.newest_new_journal(wd, before) == flat         # older code wrote workdir/
     assert er.newest_new_journal(wd, er.journal_files(wd)) is None
+
+
+def test_runaway_metrics_from_run_log(tmp_path):
+    ev = _load("experiment_eval", "rag/tools/experiment_eval.py")
+    log = tmp_path / "run.log"
+    log.write_text("Warning: x\n[Iter 1] Tokens: 11129 prompt + 96 completion (cumulative: ~11,225)\n"
+                   "[Iter 2] Tokens: 10589 prompt + 16000 completion (cumulative: ~37,814)\n"
+                   "[Iter 3] Tokens: 11206 prompt + 81 completion (cumulative: ~49,101)\n")
+    m = ev.runaway_metrics(log, {"spec_env": {"AGENTIGRID_MAX_TOKENS": "16000"}})
+    assert m == {"llm_calls_logged": 3, "llm_max_completion_per_call": 16000, "llm_runaway_calls": 1}
+    assert ev.runaway_metrics(log, {})["llm_runaway_calls"] is None          # no cap known
+    assert ev.runaway_metrics(tmp_path / "missing.log", {})["llm_calls_logged"] is None
